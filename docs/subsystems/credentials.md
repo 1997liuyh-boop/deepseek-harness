@@ -60,6 +60,8 @@ PlatformSession is a Host-only snapshot from getPlatformSession: origin names th
 
 AccountDetails.balance projects recharge wallets in value and promotional wallets in bonusWallets, with independent currency and decimal balance strings. Failed queries contain no wallet arrays.
 
+PlatformAccessRequest contains the configured origin, fixed account path, method, headers and optional body. PlatformAccessResponse contains bounded HTTP status, permitted response headers and text, or a stable transport failure code. The Host-only `deepseek-account/platform-access` waterfall receives the request and original cancellation signal; a provider executes it through the browser network stack or delegates through `next()`. Browser Cookies remain in Electron. A failed profile carrying `errorCode: 'access-blocked'` preserves stored authorization for client verification guidance.
+
 Bonus notification queries return an AccountBonusBatch with the current Platform account id and eligible orders in server order. AccountBonusNotification retains the server message and expiry without projecting credentials. Acknowledgment carries the expected account id and order id; the Host refuses it after an account change. Both notification operations use the initiating UI language through x-client-locale, without a language query parameter.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -456,6 +458,24 @@ An account model request requires the user to sign in.
 ```
 
 Source: [`packages/credentials/deepseek-account/src/types.ts`](../../packages/credentials/deepseek-account/src/types.ts)
+
+<a id="deepseek-accountplatform-access--waterfall"></a>
+
+#### `deepseek-account/platform-access` — waterfall
+
+获取指定平台的浏览器访问验证；无人处理时继续委托。
+
+```ts cordis-catalog
+/** 获取指定平台的浏览器访问验证；无人处理时继续委托。
+ * @mode waterfall
+ * @param request - 来源和路径固定的账号请求，仅供私有通道使用。
+ * @param signal - 原请求的取消和超时信号。
+ * @param next - 委托下一个验证提供者。
+ */
+'deepseek-account/platform-access'(request: PlatformAccessRequest, signal: AbortSignal, next: () => Promise<PlatformAccessResponse | undefined>): Promise<PlatformAccessResponse | undefined>
+```
+
+Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
 <a id="deepseek-accountsession-expired--emit"></a>
 

@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-计算机操作提供方让模型观察并操作桌面。本组包含共享注册器，防止同一组合同时启用多个提供方。DSH 的 [CUA 实现](../experimental/cua/README.zh.md)、平台提供方和启用组合包目前位于 `experimental`，Cua Driver 适配包也位于该组。CUA 包文档说明了迁入本组所需的平台支持条件。
+计算机操作包让模型观察并操作桌面。本组负责 Desktop 预设作用域内的 GUI 工具，以及防止同一组合同时启用多个提供方的共享注册器。DSH 的 [CUA 实现](../experimental/cua/README.zh.md)、平台提供方和启用组合包目前位于 `experimental`，Cua Driver 适配包也位于该组。CUA 包文档说明了迁入本组所需的平台支持条件。
 
 ## 目录
 
@@ -27,6 +27,7 @@ kind: "package-group"
 | 包 | 职责 | ctx 键 |
 |---|---|---|
 | [`computer-use`](computer-use/README.zh.md) | 按名称独占注册提供方 | `ctx.computerUse` |
+| [`tool-computer-use`](tool-computer-use/README.zh.md) | Desktop 计算机操作预设、GUI 工具与后台编码 Agent | `ctx.tools` |
 
 <a id="related-documentation"></a>
 ## 相关文档

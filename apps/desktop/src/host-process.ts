@@ -1,10 +1,13 @@
-/** Electron Node-mode child lifecycle for the shared Web application. */
+
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
-import { z } from 'zod'
-import type { PlatformSession } from '@deepseek-ai/dsh-deepseek-account'
+import type { PlatformSession, PlatformAccessRequest, PlatformAccessResponse } from '@deepseek-ai/dsh-deepseek-account'
 import { desktopNodeEnvironment } from './node-environment.ts'
+import type { OrbAgentModelSelection } from './orb-agent-models.ts'
+import type { OrbPermissionPreset } from './orb-permission.ts'
+import type { OrbCoordinateMode } from './millifraction-coordinates.ts'
+import { z } from 'zod'
 import { parsePluginOperationRecord, type PluginOperationRecord, type PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 
 interface ReadyEvent {
@@ -16,7 +19,7 @@ interface ReadyEvent {
 interface FatalEvent {
   readonly type: 'fatal'
   readonly message: string
-  /** The Host's complete inspected error: stack, enumerable properties, cause chain. */
+
   readonly diagnostic?: string
 }
 
@@ -25,38 +28,73 @@ interface PlatformSessionEvent {
   readonly session: PlatformSession | null
 }
 
-type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | {
-  readonly type: 'starting'
-  readonly runId: PluginOperationRunId
-} | { readonly type: 'shutdown-complete' } | {
-  readonly type: 'file-drag-resource'
+interface OverlayGuardEvent {
+  readonly type: 'overlay-guard'
   readonly requestId: number
-  readonly resource: { readonly path: string; readonly sha256: string; readonly size: number } | null
-  readonly error?: string
-} | {
-  readonly type: 'update-tasks'
-  readonly requestId: number
-  readonly active: boolean
-  readonly error?: string
-} | {
-  readonly type: 'quit-inspection'
-  readonly requestId: number
-  readonly activeTasks: boolean
-  readonly scheduledTasks: boolean
-  readonly error?: string
+  readonly action: 'begin' | 'end'
+  readonly mode: 'capture' | 'input'
 }
 
-/** Correlated answer to one shell control request. */
-type DesktopHostControlResponse = Extract<DesktopHostEvent, { readonly requestId: number }>
+interface ObservationFrameEvent {
+  readonly type: 'observation-frame'
+  readonly requestId: number
+  readonly bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null
+}
 
-/** What quitting now would affect, as reported by the Host. */
+interface SckCaptureEvent {
+  readonly type: 'sck-capture'
+  readonly requestId: number
+  readonly region: string
+  readonly excludeWindowIds: readonly number[]
+  readonly output: string
+}
+
+type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | OverlayGuardEvent | ObservationFrameEvent | SckCaptureEvent
+  | { readonly type: 'starting'; readonly runId: PluginOperationRunId }
+  | { readonly type: 'file-drag-resource'; readonly requestId: number; readonly resource: { readonly path: string; readonly sha256: string; readonly size: number } | null; readonly error?: string }
+  | { readonly type: 'platform-access'; readonly requestId: number; readonly request: PlatformAccessRequest }
+  | { readonly type: 'platform-access-cancel'; readonly requestId: number }
+  | { readonly type: 'shutdown-complete' } | {
+    readonly type: 'update-tasks'
+    readonly requestId: number
+    readonly active: boolean
+    readonly error?: string
+  } | {
+    readonly type: 'quit-inspection'
+    readonly requestId: number
+    readonly activeTasks: boolean
+    readonly scheduledTasks: boolean
+    readonly error?: string
+  }
+
+
+type DesktopHostControlResponse = Extract<DesktopHostEvent, { readonly type: 'update-tasks' | 'quit-inspection' | 'file-drag-resource' }>
+
+
 export interface DesktopQuitInspection {
   readonly activeTasks: boolean
   readonly scheduledTasks: boolean
 }
 
-/** Quit inspection deadline; a slower Host counts as unknown work and the shell asks before quitting. */
+
 export const QUIT_INSPECTION_DEADLINE_MS = 2_000
+
+export type DesktopHostOrbCommand =
+  | { readonly type: 'orb-permission'; readonly preset: OrbPermissionPreset; readonly sessionId?: string }
+  | { readonly type: 'orb-coordinate-mode'; readonly mode: OrbCoordinateMode }
+  | {
+    readonly type: 'orb-code-agent-model'
+    readonly provider: string
+    readonly model: string
+    readonly reasoningEffort?: string
+  }
+
+
+export interface DesktopOrbHostHandlers {
+  onOverlayGuard?(event: OverlayGuardEvent): readonly number[] | void | Promise<readonly number[] | void>
+  onObservationFrame?(event: ObservationFrameEvent): void | Promise<void>
+  onSckCapture?(event: SckCaptureEvent): void | Promise<void>
+}
 
 const MAX_HOST_DIAGNOSTIC_CHARS = 64 * 1024
 const runIdSchema = z.uuid()
@@ -65,6 +103,24 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
   const candidate = message as Record<string, unknown>
   switch (candidate.type) {
+    case 'platform-access': {
+      if (!Number.isSafeInteger(candidate.requestId) || typeof candidate.request !== 'object' || candidate.request === null) return false
+      const request = candidate.request as Record<string, unknown>
+      if (typeof request.origin !== 'string' || typeof request.path !== 'string'
+        || !['/auth-api/v0/users/current', '/api/v0/users/get_user_summary', '/api/v0/users/get_unnotified_bonuses',
+          '/api/v0/users/ack_bonus_notified', '/auth-api/v0/dsh/auth_init', '/auth-api/v0/dsh/auth_exchange'].includes(request.path)
+        || (request.method !== 'GET' && request.method !== 'POST')
+        || (request.body !== undefined && (typeof request.body !== 'string' || Buffer.byteLength(request.body) > 65_536))
+        || (request.method === 'GET' && request.body !== undefined)
+        || typeof request.headers !== 'object' || request.headers === null || Array.isArray(request.headers)
+        || Object.entries(request.headers).some(([name, value]) => typeof value !== 'string'
+          || !/^[a-z0-9-]+$/.test(name) || /[\r\n]/.test(value) || value.length > 16_384
+          || ['host', 'content-length', 'transfer-encoding', 'connection'].includes(name))) return false
+      try { const url = new URL(request.origin); return url.origin === request.origin && url.protocol === 'https:' && !url.username && !url.password }
+      catch { return false }
+    }
+    case 'platform-access-cancel':
+      return Number.isSafeInteger(candidate.requestId)
     case 'starting':
       return runIdSchema.safeParse(candidate.runId).success
     case 'shutdown-complete':
@@ -105,6 +161,18 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
     case 'quit-inspection':
       return Number.isSafeInteger(candidate.requestId) && typeof candidate.activeTasks === 'boolean'
         && typeof candidate.scheduledTasks === 'boolean' && (candidate.error === undefined || typeof candidate.error === 'string')
+    case 'overlay-guard':
+      return Number.isSafeInteger(candidate.requestId)
+        && (candidate.action === 'begin' || candidate.action === 'end')
+        && (candidate.mode === 'capture' || candidate.mode === 'input')
+    case 'observation-frame':
+      return Number.isSafeInteger(candidate.requestId)
+        && (candidate.bounds === null || typeof candidate.bounds === 'object')
+    case 'sck-capture':
+      return Number.isSafeInteger(candidate.requestId)
+        && typeof candidate.region === 'string'
+        && Array.isArray(candidate.excludeWindowIds)
+        && typeof candidate.output === 'string'
     default:
       return false
   }
@@ -123,38 +191,38 @@ async function exitsWithin(exit: Promise<void>, milliseconds: number): Promise<b
   }
 }
 
-/** Browser authentication URL reported by the running Web application. */
+
 export interface DesktopHostReady {
   readonly url: string
   readonly injections?: readonly unknown[] | undefined
 }
 
-/** The child has exited, but task teardown did not finish successfully. */
+
 export class DesktopHostUncleanExitError extends Error {}
 
-/**
- * A Host failure reported over IPC before the process exited. `message` is what
- * the Host chose to show; `diagnostic` is its complete inspected error, kept
- * separately so a crash report can print it verbatim instead of a string escaped
- * inside another error's properties.
- */
+
+
+
+
+
+
 export class DesktopHostFatalError extends Error {
   readonly #diagnostic: string | undefined
 
-  /**
-   * @param message - The Host's failure message.
-   * @param diagnostic - The Host's inspected error, when the Host supplied one.
-   */
+
+
+
+
   constructor(message: string, diagnostic: string | undefined) {
     super(message)
     this.#diagnostic = diagnostic
   }
 
-  /** The Host's inspected error; a getter so `util.inspect` of this error does not repeat it as an escaped property. */
+
   get diagnostic(): string | undefined { return this.#diagnostic }
 }
 
-/** One Web backend running under the Electron executable in Node mode. */
+
 export class DesktopHostProcess {
   private runId: PluginOperationRunId | undefined
   private child: ChildProcess | undefined
@@ -170,10 +238,23 @@ export class DesktopHostProcess {
   private stopping = false
   private shutdownCompleted = false
   private nextControlId = 1
+  private readonly accessRequests = new Map<number, AbortController>()
   private readonly controlRequests = new Map<number, {
     resolve: (response: DesktopHostControlResponse) => void
     reject: (error: Error) => void
   }>()
+
+
+
+
+
+
+
+
+
+
+
+
 
   /**
    * @param node - Absolute Electron executable in Node mode.
@@ -199,13 +280,17 @@ export class DesktopHostProcess {
     private readonly packageManager?: { readonly pnpm: string; readonly nodeBin: string },
 
     private readonly onPlatformSession?: (session: PlatformSession | null) => void,
+    private readonly orb?: DesktopOrbHostHandlers,
+    private readonly onPlatformAccess?: (
+      request: PlatformAccessRequest, signal: AbortSignal,
+    ) => Promise<PlatformAccessResponse | undefined>,
     private readonly onPluginOperation?: (record: PluginOperationRecord) => void,
   ) {}
 
-  /**
-   * Start this child once and await its Web application URL.
-   * @returns Ready facts supplied by the child after application startup.
-   */
+
+
+
+
   async start(): Promise<DesktopHostReady> {
     if (this.child !== undefined) return this.readyPromise
     const entry = join(this.runtimeDir, 'node_modules', '@deepseek-ai', 'dsh-desktop-host', 'lib', 'index.js')
@@ -224,7 +309,9 @@ export class DesktopHostProcess {
     })
     this.child = child
     child.stderr?.setEncoding('utf8')
-    child.stderr?.on('data', (chunk: string) => { this.stderr = (this.stderr + chunk).slice(-MAX_HOST_DIAGNOSTIC_CHARS) })
+    child.stderr?.on('data', (chunk: string) => {
+      this.stderr = (this.stderr + chunk).slice(-MAX_HOST_DIAGNOSTIC_CHARS)
+    })
     child.stdout?.pipe(process.stdout)
     child.on('message', (message: unknown) => {
       if (typeof message === 'object' && message !== null && 'type' in message && message.type === 'plugin-operation') {
@@ -246,6 +333,43 @@ export class DesktopHostProcess {
       if (message.type === 'starting') this.runId = message.runId
       else if (message.type === 'ready') this.readyResolve({ url: message.url, injections: message.injections })
       else if (message.type === 'platform-session') this.onPlatformSession?.(message.session)
+      else if (message.type === 'platform-access') {
+        const controller = new AbortController()
+        this.accessRequests.get(message.requestId)?.abort()
+        this.accessRequests.set(message.requestId, controller)
+        void Promise.resolve().then(() => this.onPlatformAccess?.(message.request, controller.signal))
+          .catch((_error: unknown) => undefined).then((response) => {
+            if (this.accessRequests.get(message.requestId) !== controller) return
+            this.accessRequests.delete(message.requestId)
+            if (!this.stopping && child.connected) child.send({ type: 'platform-access-result', requestId: message.requestId, response: response ?? null },
+              (error) => { if (error !== null && !this.stopping) this.fail(new Error('desktop platform access: IPC delivery failed')) })
+          })
+      }
+      else if (message.type === 'platform-access-cancel') {
+        this.accessRequests.get(message.requestId)?.abort()
+        this.accessRequests.delete(message.requestId)
+      }
+      else if (message.type === 'overlay-guard') {
+        void Promise.resolve().then(() => this.orb?.onOverlayGuard?.(message)).then((ids) => {
+          child.send({ type: 'overlay-guard-ack', requestId: message.requestId, excludeWindowIds: ids ?? [] })
+        }).catch((error: unknown) => { this.fail(error instanceof Error ? error : new Error(String(error))) })
+      }
+      else if (message.type === 'observation-frame') {
+        void Promise.resolve().then(() => this.orb?.onObservationFrame?.(message)).then(() => {
+          child.send({ type: 'observation-frame-ack', requestId: message.requestId })
+        }).catch((error: unknown) => { this.fail(error instanceof Error ? error : new Error(String(error))) })
+      }
+      else if (message.type === 'sck-capture') {
+        void Promise.resolve().then(() => this.orb?.onSckCapture?.(message)).then(() => {
+          child.send({ type: 'sck-capture-ack', requestId: message.requestId })
+        }).catch((error: unknown) => {
+          child.send({
+            type: 'sck-capture-ack',
+            requestId: message.requestId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
       else if (message.type === 'shutdown-complete') {
         if (this.stopping) this.shutdownCompleted = true
         else this.fail(new Error('dsh desktop host acknowledged an unrequested shutdown'))
@@ -269,23 +393,46 @@ export class DesktopHostProcess {
     return this.readyPromise
   }
 
-  /**
-   * Inspect active work or lock request admission for update handoff.
-   * @param action - Read-only inspection, admission lock, or recovery unlock.
-   * @returns Whether live tasks would be affected. Locking drains admitted API requests before inspecting tasks;
-   * an unanswered drain fails at the control-request deadline without authorizing installation.
-   */
+
+
+
+
+
+
+
+
+
+
+  sendOrb(command: DesktopHostOrbCommand): void {
+    const child = this.child
+    if (child === undefined || !child.connected || this.stopping) return
+    child.send(command)
+  }
+
+
+
+
+
+  sendOrbCodeAgentModel(selection: OrbAgentModelSelection): void {
+    this.sendOrb({
+      type: 'orb-code-agent-model',
+      provider: selection.provider,
+      model: selection.model,
+      ...(selection.reasoningEffort === undefined ? {} : { reasoningEffort: selection.reasoningEffort }),
+    })
+  }
+
   async updateTasks(action: 'inspect' | 'lock' | 'unlock'): Promise<boolean> {
     const response = await this.control({ type: 'update-tasks', action }, 10_000, 'desktop update: task inspection timed out', 'desktop update')
     if (response.type !== 'update-tasks') throw new Error('desktop update: Host answered with a different control response')
     return response.active
   }
 
-  /**
-   * Ask the Host what quitting now would interrupt.
-   * @returns Active tasks and armed scheduled reminders; rejects when the Host is unavailable or misses
-   * {@link QUIT_INSPECTION_DEADLINE_MS}, and the shell then asks before quitting.
-   */
+
+
+
+
+
   async inspectQuit(): Promise<DesktopQuitInspection> {
     const response = await this.control({ type: 'quit-inspection' }, QUIT_INSPECTION_DEADLINE_MS, 'desktop quit: inspection timed out', 'desktop quit')
     if (response.type !== 'quit-inspection') throw new Error('desktop quit: Host answered with a different control response')
@@ -338,16 +485,18 @@ export class DesktopHostProcess {
     }
   }
 
-  /**
-   * Request teardown and await child exit, escalating termination when needed.
-   * @param requireGraceful - Reject update handoff after forced termination or unsuccessful child exit.
-   * @returns Completion of owned process teardown. DesktopHostUncleanExitError confirms exit but refuses installation;
-   * other failures do not confirm exit.
-   */
+
+
+
+
+
+
   async stop(requireGraceful = false): Promise<void> {
     const child = this.child
     if (child === undefined) return
     this.stopping = true
+    for (const request of this.accessRequests.values()) request.abort()
+    this.accessRequests.clear()
     this.onPlatformSession?.(null)
     if (child.connected) child.send({ type: 'shutdown' }, (error) => { if (error !== null) this.fail(error) })
     const exited = this.exitPromise ?? Promise.resolve()
@@ -361,12 +510,14 @@ export class DesktopHostProcess {
     }
     this.child = undefined
     if (requireGraceful && (!graceful || child.exitCode !== 0 || !this.shutdownCompleted)) {
-      // This diagnostic reaches expandable UI; arbitrary plugin stderr can contain credentials.
+
       throw new DesktopHostUncleanExitError(`desktop update: Host did not complete graceful task teardown (exit ${String(child.exitCode)}, signal ${String(child.signalCode)}, shutdown acknowledged ${String(this.shutdownCompleted)}, graceful deadline exceeded ${String(!graceful)})`)
     }
   }
 
   private fail(error: Error): void {
+    for (const request of this.accessRequests.values()) request.abort()
+    this.accessRequests.clear()
     if (this.runId !== undefined) Object.assign(error, { hostRunId: this.runId })
     this.onPlatformSession?.(null)
     this.readyReject(error)

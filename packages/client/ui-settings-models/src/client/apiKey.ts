@@ -29,7 +29,21 @@ const ENV_LINE = /^[A-Z][A-Z0-9_]*=[^=]/
  * causes apart would spend the field's one line on a distinction that changes
  * nothing about what to do.
  */
-export type ApiKeyFailureKey = 'keyBlank' | 'keyIllegalCharacters'
+export type ApiKeyFailureKey = 'keyBlank' | 'keyIllegalCharacters' | 'keyNotOpenPlatform'
+
+/** DeepSeek 开放平台密钥的形态：`sk-` 前缀加字母数字；网页登录令牌是 UUID 形，粘贴进来会在官方接口得到 401。 */
+const OPEN_PLATFORM_KEY = /^sk-[A-Za-z0-9_-]+$/
+
+/**
+ * 只对 DeepSeek 官方 Provider 使用：非 `sk-` 形态的值不是开放平台密钥。
+ * @param draft - the key input's current value, untrimmed.
+ * @returns `keyNotOpenPlatform` when the trimmed value is non-empty and not an Open Platform key.
+ */
+export function deepSeekKeyFailure(draft: string): ApiKeyFailureKey | undefined {
+  const value = draft.trim()
+  if (value.length === 0 || OPEN_PLATFORM_KEY.test(value)) return undefined
+  return 'keyNotOpenPlatform'
+}
 
 /** Whether a value is wrapped in one matching pair of quotes. */
 function isQuoted(value: string): boolean {

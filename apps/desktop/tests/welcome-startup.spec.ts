@@ -1,5 +1,6 @@
+import './fixtures/orb-startup-mocks.ts'
 vi.mock('../src/web-document.ts', () => ({
-  authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn(), removeLegacyHostCookies: async () => {},
+  authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), serveOverlayDocument: vi.fn(), forwardWebRequest: vi.fn(), removeLegacyHostCookies: async () => {},
 }))
 /** Welcome startup uses the Host before transitioning to the workspace. */
 
@@ -49,6 +50,8 @@ vi.mock('../src/crash-report.ts', async importOriginal => ({
   pruneCrashReports: vi.fn(async () => {}),
 }))
 vi.mock('electron', () => ({
+  screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }) },
+  systemPreferences: { getMediaAccessStatus: () => 'granted', isTrustedAccessibilityClient: () => true },
   clipboard: { writeText: state.copy },
   app: {
     isPackaged: false,
@@ -88,7 +91,7 @@ vi.mock('electron', () => ({
   },
   nativeTheme: state.nativeTheme,
   session: { defaultSession: {
-    on: vi.fn(), cookies: {},
+    on: vi.fn(), setDisplayMediaRequestHandler: vi.fn(), cookies: {},
     setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: vi.fn() },
   } },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
@@ -113,8 +116,11 @@ vi.mock('../src/project-manager.ts', () => ({ DesktopProjectManager: class {
   applyRelease = vi.fn(async () => {})
   canRecoverProfile = vi.fn(() => true)
 } }))
-vi.mock('../src/host-process.ts', () => ({
+vi.mock('../src/host-process.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/host-process.ts')>(),
   DesktopHostProcess: class {
+    sendOrb = vi.fn()
+    sendOrbCodeAgentModel = vi.fn()
     start = state.startHost
     stop = state.stopHost
     fetch() {

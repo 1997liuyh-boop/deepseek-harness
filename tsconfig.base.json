@@ -28,6 +28,15 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-client-ui-settings-models/types": ["./packages/client/ui-settings-models/src/cc-switch-types.ts"],
+      "@deepseek-ai/dsh-llm-routing/types": ["./packages/llm/llm-routing/src/types.ts"],
+      "@deepseek-ai/dsh-session-library/types": ["./packages/session/session-library/src/types.ts"],
+      "@deepseek-ai/dsh-client-ui-overlay-chat": ["./packages/client/ui-overlay-chat/src/index.ts"],
+      "@deepseek-ai/dsh-client-ui-overlay-chat/client": ["./packages/client/ui-overlay-chat/src/client/index.ts"],
+      "@deepseek-ai/dsh-client-ui-settings-orb": ["./packages/client/ui-settings-orb/src/index.ts"],
+      "@deepseek-ai/dsh-client-ui-settings-orb/client": ["./packages/client/ui-settings-orb/src/client/index.ts"],
+      "@deepseek-ai/dsh-tool-computer-use": ["./packages/computer-use/tool-computer-use/src/index.ts"],
+      "@deepseek-ai/dsh-tool-computer-use/code-agent": ["./packages/computer-use/tool-computer-use/src/code-agent.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions": ["./packages/client/ui-file-actions/src/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/client": ["./packages/client/ui-file-actions/src/client/index.ts"],
       "@deepseek-ai/dsh-client-ui-file-actions/types": ["./packages/client/ui-file-actions/src/types.ts"],
@@ -481,6 +490,7 @@
       "@deepseek-ai/dsh-llm-pi-ai": ["./packages/llm/llm-pi-ai/src"],
       "@deepseek-ai/dsh-llm-replay": ["./packages/test-support/llm-replay/src"],
       "@deepseek-ai/dsh-llm-retry": ["./packages/llm/llm-retry/src"],
+      "@deepseek-ai/dsh-llm-routing": ["./packages/llm/llm-routing/src"],
       "@deepseek-ai/dsh-loader-smoke": ["./packages/test-support/loader-smoke/src"],
       "@deepseek-ai/dsh-lsp": ["./packages/lsp/lsp/src"],
       "@deepseek-ai/dsh-lsp-stdio": ["./packages/lsp/lsp-stdio/src"],
@@ -524,6 +534,7 @@
       "@deepseek-ai/dsh-session-format-v1-to-v2": ["./packages/session/session-format-v1-to-v2/src"],
       "@deepseek-ai/dsh-session-format-v2-to-v3": ["./packages/session/session-format-v2-to-v3/src"],
       "@deepseek-ai/dsh-session-format-v3-to-v4": ["./packages/session/session-format-v3-to-v4/src"],
+      "@deepseek-ai/dsh-session-library": ["./packages/session/session-library/src"],
       "@deepseek-ai/dsh-session-log-deepseek": ["./packages/session/session-log-deepseek/src"],
       "@deepseek-ai/dsh-session-log-export": ["./packages/session-query/session-log-export/src"],
       "@deepseek-ai/dsh-session-persistence": ["./packages/session/session-persistence/src"],

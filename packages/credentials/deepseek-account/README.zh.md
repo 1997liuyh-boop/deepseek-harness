@@ -34,9 +34,11 @@ getUnnotifiedBonuses 返回平台尚未记录为已展示的赠金及其所属�
 <a id="use-this-package"></a>
 ## 使用此包
 
-本地成功退出登录后发出 `deepseek-account/signed-out`。Platform 提供方安装账号模块的取消监听器，根据运行中 Agent 的 `session.requestContext().provider` 判断账号任务，取消时保留收件箱。账号控制器的确认弹窗复用同一判断，不维护额外 Agent 状态。新轮次绑定首请求前，该判断仍读取上一轮的提供方。
+`deepseek-account/platform-access` 在原请求期限内将同源账号请求委托给浏览器提供方。私有的 `PlatformAccessRequest` 与有界的 `PlatformAccessResponse` 仅在 Host 和 Electron 主进程之间传递；浏览器验证 Cookie 保留在 Electron 中。两类消息均不进入账号 RPC、模型请求或 Session 日志。`access-blocked` 区分未完成的访问验证与授权过期，资料查询失败时可携带该错误码供界面显示恢复说明。
 
 `AccountProfile.avatarUrl` 是可选的账号头像 URL；为空或缺失时表示没有头像。
+
+本地成功退出登录后发出 `deepseek-account/signed-out`。Platform 提供方安装账号模块的取消监听器，根据运行中 Agent 的 `session.requestContext().provider` 判断账号任务，取消时保留收件箱。账号控制器的确认弹窗复用同一判断，不维护额外 Agent 状态。新轮次绑定首请求前，该判断仍读取上一轮的提供方。
 
 该服务定义账号操作和可重连的状态快照。平台提供者负责协议和授权记录。凭证仅限 Host；API 控制器只导出状态与操作，不导出 resolveToken。
 

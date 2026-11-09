@@ -1,0 +1,29 @@
+# 路由场景不执行 shell，关闭平台专属工具以固定回放输入。
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 0
+
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: llm-routing
+  name: "@deepseek-ai/dsh-llm-routing"
+  config:
+    policy:
+      mode: aggregate
+      routes:
+        - { provider: deepseek-official, model: deepseek-v4-flash }
+        - { provider: deepseek-messages, model: deepseek-v4-pro }
+      defaultIndex: 0
+      retriesPerRoute: 0
+      delayMs: 1
+      budgetMs: 60000

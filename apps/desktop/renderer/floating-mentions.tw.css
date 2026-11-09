@@ -1,0 +1,18 @@
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+@source "./floating.html";
+@source "./floating.js";
+
+#ball-still { @apply pointer-events-none absolute inset-0 size-full rounded-full object-cover; }
+#ball-still[hidden] { @apply hidden; }
+#ball.avatar-still #ball-gif { @apply invisible; }
+
+#studio-mentions {
+  @apply absolute inset-x-3 bottom-full z-20 mb-2 max-h-48 overflow-y-auto rounded-2xl border p-1 text-sm shadow-lg;
+  background: var(--white);
+  color: var(--black);
+  border-color: var(--border);
+}
+#studio-mentions[hidden] { @apply hidden; }
+.studio-mention-option { @apply block w-full cursor-pointer rounded-xl px-3 py-2 text-left; }
+.studio-mention-option[aria-selected="true"], .studio-mention-option:hover { background: var(--input-bg); }

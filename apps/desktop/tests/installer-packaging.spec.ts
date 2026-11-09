@@ -5,6 +5,8 @@ import { Arch, Platform } from 'electron-builder'
 import { AppInfo, Packager } from 'app-builder-lib'
 import { expandMacro } from 'app-builder-lib/out/util/macroExpander.js'
 import { describe, expect, it, vi } from 'vitest'
+import { loadDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
+import { desktopElectronBuilderEnvironment } from '../scripts/package-target.ts'
 
 const { execute, write } = vi.hoisted(() => ({ execute: vi.fn(async () => undefined), write: vi.fn(async () => undefined) }))
 vi.mock('node:child_process', async (importOriginal) => {
@@ -18,6 +20,26 @@ vi.mock('node:fs/promises', async importOriginal => ({
 }))
 
 describe('installer preparation preserves application dependencies', () => {
+  it('builds a local unsigned Windows installer without update policy, publishing, or signing configuration', async () => {
+    const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
+    const local = loadDesktopPackageEnvironment('win32', {
+      DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'unused-pin', DOWNLOAD_PROD_COS_SECRET_KEY: 'unused-secret',
+      DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: 'invalid-json',
+    }, 'missing-settings', { unsigned: true, local: true })
+    const env = desktopElectronBuilderEnvironment({ ...local, DSH_DESKTOP_TARGET_PLATFORM: 'win32' }, true)
+    const config = createElectronBuilderConfig(env, 'win32', 'x64')
+    expect(config.appId).toBe('com.deepseek.harness')
+    expect(config.extraMetadata).not.toHaveProperty('dshMandatoryUpdatePolicy')
+    expect(config.publish).toBeNull()
+    expect(config.win.forceCodeSigning).toBe(false)
+    expect(config.win.signtoolOptions.sign).toBeUndefined()
+    expect(config.artifactName).toContain('-unsigned.')
+    for (const override of [{ DSH_PACKAGING_PRESET: 'test' }, { DSH_DESKTOP_UNSIGNED: '0' }]) {
+      expect(() => createElectronBuilderConfig({ ...env, ...override }, 'win32', 'x64'))
+        .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
+    }
+  })
+
   it.each(['win32', 'darwin'] as const)('rejects a missing production policy before signing on %s', async (platform) => {
     const { createElectronBuilderConfig } = await import('../scripts/electron-builder-config.mjs')
     expect(() => createElectronBuilderConfig({ DSH_DESKTOP_APP_ID: 'com.example.installer',

@@ -176,6 +176,11 @@ export const zh = {
   'message.retry.status': '{label}（{retry}/{maximum}） · {seconds}s',
   'message.retry.delay': '重试延迟：',
   'message.retry.failure': '失败原因：',
+  'message.retry.target': '下一模型：',
+  'message.failure.replay': '此历史含有绑定原供应商的加密推理。请切回原供应商与凭据，或在会话菜单选择“从可读历史新建会话”，原件会保留。',
+  'message.replay.continue': '从可读历史继续',
+  'message.replay.failed': '新会话未能打开，原会话已保留，请重试',
+  'message.failure.routingInput': '当前路由中的模型无法处理这些图片。请选择支持图片的模型，或在聚合路由中添加图片模型后重试。',
   'message.failure.auth': 'API 密钥无效',
   'message.taskStopped': '任务已停止',
   'message.failure.accountSignedOut': '任务已因退出 DeepSeek 登录而停止。',
@@ -386,6 +391,11 @@ export const en = {
   'message.retry.status': '{label} ({retry}/{maximum}) · {seconds}s',
   'message.retry.delay': 'Retry delay: ',
   'message.retry.failure': 'Failure reason: ',
+  'message.retry.target': 'Next model: ',
+  'message.failure.replay': 'This history contains provider-bound encrypted reasoning. Return to the original provider and credentials, or choose New conversation from readable history in the session menu. The original is kept.',
+  'message.replay.continue': 'Continue from readable history',
+  'message.replay.failed': 'Could not open the new conversation. The original was kept; try again.',
+  'message.failure.routingInput': 'The routing candidates cannot process these images. Select an image-capable model or add one to aggregate routing, then retry.',
   'message.failure.auth': 'API key is invalid',
   'message.taskStopped': 'Task stopped',
   'message.failure.accountSignedOut': 'Stopped because you signed out of DeepSeek.',
@@ -422,6 +432,7 @@ export const en = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  ...en,
   'message.stepProcess.thinking': 'リクエストを分析中',
   'message.stepProcess.read': 'ファイルを読み取り中',
   'message.stepProcess.readImage': '画像を読み取り中',
@@ -629,6 +640,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  ...en,
   'message.stepProcess.thinking': 'Analizando la solicitud',
   'message.stepProcess.read': 'Leyendo archivos',
   'message.stepProcess.readImage': 'Leyendo imágenes',
@@ -836,6 +848,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  ...en,
   'message.stepProcess.thinking': 'Analyser la demande',
   'message.stepProcess.read': 'Lecture de fichiers',
   'message.stepProcess.readImage': 'Lire des images',
@@ -1043,6 +1056,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  ...en,
   'message.stepProcess.thinking': 'Analyse der Anfrage',
   'message.stepProcess.read': 'Dateien lesen',
   'message.stepProcess.readImage': 'Bilder lesen',
@@ -1250,6 +1264,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  ...en,
   'message.stepProcess.thinking': 'Анализ запроса',
   'message.stepProcess.read': 'Чтение файлов',
   'message.stepProcess.readImage': 'Чтение изображений',
@@ -1457,6 +1472,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  ...en,
   'message.stepProcess.thinking': 'Analisando a solicitação',
   'message.stepProcess.read': 'Lendo arquivos',
   'message.stepProcess.readImage': 'Lendo imagens',

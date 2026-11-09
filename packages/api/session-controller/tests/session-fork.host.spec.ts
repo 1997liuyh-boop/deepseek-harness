@@ -8,7 +8,7 @@ import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-ag
 import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
-import { ToolCallId, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createAssistantMessage, createMessage, createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import SessionStore, { TOOL_OUTCOME_UNKNOWN, SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
@@ -97,6 +97,28 @@ const remote = async (ctx: Context) => await createSessionTestRemote(ctx, {
 })
 
 describe('sessions.fork', () => {
+  it('creates an explicit readable copy without changing the encrypted source', async () => {
+    const ctx = await composed()
+    try {
+      const source = await liveAgent(ctx, 'opaque-source', 0)
+      source.append('turn/start', { turn: 1 })
+      source.append('step/start', { turn: 1, step: 1 })
+      source.append('assistant/message', { turn: 1, step: 1, stream: [], message: createAssistantMessage({
+        content: [{ type: 'reasoning', text: '' }, { type: 'text', text: 'visible answer' }],
+        source: { provider: 'original', model: 'model', replayState: { private: 'encrypted' } },
+      }) }, { surfaceOp: 'append' })
+      source.append('step/end', { turn: 1, step: 1 })
+      source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const result = await (await remote(ctx)).fork({ sessionId: source.id, readableHistory: true })
+      if (!result.ok) throw result.error
+      const copy = ctx.sessions.get(result.value.sessionId)!
+      expect(copy.header.isSeeded).toBe(true)
+      expect(copy.deriveMessages()[0]?.content).toEqual([{ type: 'text', text: 'visible answer' }])
+      expect(copy.deriveMessages()[0]?.source).not.toHaveProperty('replayState')
+      expect(source.deriveMessages()[0]?.source).toHaveProperty('replayState')
+      expect(source.deriveMessages()[0]?.content).toHaveLength(2)
+    } finally { await ctx.fiber.dispose() }
+  })
   it.each([
     { allowMigration: undefined, status: 'current' },
     { allowMigration: false, status: 'current' },
@@ -130,7 +152,7 @@ describe('sessions.fork', () => {
       })
 
       if (!response.ok) throw response.error
-      expect(open).toHaveBeenCalledWith(source.id, 'read', undefined)
+      expect(open).toHaveBeenCalledWith(source.id, 'read', { signal: expect.any(AbortSignal) as AbortSignal })
       expect(ctx.sessions.get(source.id)).toBeUndefined()
       expect(ctx.sessions.get(response.value.sessionId)?.inheritedEventCount).toBe(2)
     } finally {

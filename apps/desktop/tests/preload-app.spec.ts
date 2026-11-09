@@ -29,6 +29,18 @@ it('reads only native login API-key presence through the onboarding bridge', asy
   expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(DESKTOP_IPC.onboardingApiKey)
 })
 
+it('将项目会话跟随与退出跟随转交给桌面主进程', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/'))
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls.find(([name]) => name === 'dshDesktop')?.[1] as DshDesktopProductApi
+  await api.orb.followSession('fd1be348-2de9-4294-9fd1-e18442b482f1')
+  await api.orb.followSession(null)
+  expect(electron.ipcRenderer.invoke.mock.calls).toEqual([
+    [DESKTOP_IPC.floatingFollowSession, 'fd1be348-2de9-4294-9fd1-e18442b482f1'],
+    [DESKTOP_IPC.floatingFollowSession, null],
+  ])
+})
+
 it('exposes onboarding size activation to the application document', async () => {
   vi.stubGlobal('location', new URL('dsh-app://app/'))
   await import('../src/preload-app.ts')

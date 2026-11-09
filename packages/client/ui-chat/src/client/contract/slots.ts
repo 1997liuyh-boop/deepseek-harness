@@ -241,7 +241,8 @@ export interface ChatNodeOwnerProps {
   cwd?: string | undefined
   openFile: (path: string, options?: OpenFileOptions) => void
   inspectCall: ((callId: ToolCallId) => void) | undefined
-  forkAt: (seq: number) => void
+  /** 从指定轮次分支；可读模式保留原件并移除供应商私有重放数据。 */
+  forkAt: (seq: number, readableHistory?: boolean) => void | Promise<void>
   /** Session-authorized image loader supplied by the Chat view. */
   loadImage: MessageImageLoader
   /** Turn-process state when this Node belongs to a projected Turn. */
@@ -355,7 +356,9 @@ export interface ChatViewInjected {
     save: (position: ChatScrollPosition | null) => void
     read: () => ChatScrollPosition | null
   }
-  forkAt: (seq: number) => void
+  /** 从指定轮次分支，可读模式的错误返回调用方显示。 */
+  forkAt: (seq: number, readableHistory?: boolean) => void | Promise<void>
+  fileMentions: (owner: TurnTailOwnerProps, getFileTriggerProps: NonNullable<Parameters<ChatFileMentions['forClosing']>[2]>) => MarkdownFileMentions | undefined
 }
 
 /** Session-owned node sources shared with the view, plus the flow's connection state. */

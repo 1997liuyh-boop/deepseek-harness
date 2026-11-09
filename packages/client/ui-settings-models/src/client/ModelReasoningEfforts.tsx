@@ -1,4 +1,4 @@
-/** Reasoning-level declarations for a model on a hand-declared pi-ai route. */
+/** 第三方模型的思考档位；未编辑时继承目录，关闭后明确禁用。 */
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -46,14 +46,14 @@ function readEfforts(model: DeepSeekModelDraft): Entries | undefined {
 /**
  * Replace a row's declared levels, preserving every other field.
  * @param model - model row as drafted.
- * @param entries - the levels to write in row order, or `undefined` to remove the field.
+ * @param entries - 按顺序保存的档位；undefined 表示明确禁用。
  * @returns the replacement row.
  */
 function withEfforts(model: DeepSeekModelDraft, entries: Entries | undefined): DeepSeekModelDraft {
   const next = { ...model }
   if (entries === undefined) {
-    // Absent is how a hand-declared model says it does not reason.
-    Reflect.deleteProperty(next, 'reasoningEfforts')
+    // 显式关闭，避免目录模型重新继承原有思考能力。
+    next['reasoningEfforts'] = false
     return next
   }
   next['reasoningEfforts'] = Object.fromEntries(entries)

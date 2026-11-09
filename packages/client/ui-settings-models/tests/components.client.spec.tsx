@@ -361,6 +361,28 @@ async function mountDeepSeekCard(overrides: Parameters<typeof scriptedFace>[0] =
 }
 
 describe('ModelsSection', () => {
+  it('verifies the saved official credential without sending a new key', async () => {
+    const scripted = await mountDeepSeekCard()
+    fireEvent.click(screen.getByRole('button', { name: en.keyVerify }))
+    await screen.findByText(en.keyVerified)
+    expect({ hint: screen.getByText(en.keyManagedHint).textContent, action: screen.getByRole('button', { name: en.keyVerify }).textContent,
+      status: screen.getByText(en.keyVerified).textContent }).toMatchSnapshot()
+    expect(scripted.face.llm.discoverModels).toHaveBeenCalledWith('llm-deepseek', {
+      provider: 'deepseek-official', baseURL: 'https://base',
+    })
+    expect(scripted.set).not.toHaveBeenCalled()
+  })
+
+  it('keeps the current key when the official endpoint rejects its replacement', async () => {
+    const scripted = await mountDeepSeekCard()
+    vi.spyOn(operationsWith(scripted.face), 'discoverModels').mockResolvedValue({ kind: 'refused', code: 'AUTH', message: 'rejected' })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-replacement-fixture' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await screen.findByText(en.keyRejected)
+    expect(scripted.set).not.toHaveBeenCalled()
+    expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).value).toBe('sk-replacement-fixture')
+  })
+
   it('keeps the credential state unconfirmed when its redacted read fails', async () => {
     const scripted = scriptedFace()
     scripted.face.credentials.describe.mockResolvedValue(remoteFail('credentials unavailable', 'gateway/internal'))
@@ -1406,7 +1428,7 @@ describe('ModelsSection', () => {
   it('saves credentials without changing the default model', async () => {
     const { ctx, set } = await mountDeepSeekCard()
     const initialize = vi.spyOn(ctx.remote.session, 'initializeDefaultModel')
-    fireEvent.change(await screen.findByLabelText(en.keyInput), { target: { value: 'test-key' } })
+    fireEvent.change(await screen.findByLabelText(en.keyInput), { target: { value: 'sk-test-key' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(screen.queryByText(en.apply)).toBeNull() })
     expect(set).toHaveBeenCalledOnce()

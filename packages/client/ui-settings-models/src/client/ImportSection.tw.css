@@ -1,0 +1,21 @@
+@reference "tailwindcss";
+.card { @apply flex min-w-0 flex-col gap-3 rounded-xl border border-solid border-[var(--dsw-alias-border-l4)] bg-[var(--dsw-alias-bg-module-platform)] p-4; }
+.title { @apply m-0 text-sm font-medium text-[var(--dsw-alias-label-primary)]; }
+.hint { @apply m-0 text-[13px] leading-relaxed text-[var(--dsw-alias-label-secondary)]; }
+.dialog.dialog { @apply h-[70vh] max-h-full w-[760px] max-w-full; }
+.content { @apply min-h-0 flex-1; }
+.content > :first-child { @apply shrink-0; }
+.content > :last-child { @apply min-h-0 flex-1 overflow-y-auto; }
+.body { @apply flex min-h-0 min-w-0 flex-1 flex-col gap-3; }
+.body > :not(.list) { @apply shrink-0; }
+.row { @apply flex flex-wrap items-center gap-2; }
+.field { @apply flex min-w-0 flex-col gap-2 text-[13px] text-[var(--dsw-alias-label-secondary)]; }
+.input { @apply box-border min-w-0 max-w-full rounded-lg border border-solid border-[var(--dsw-alias-border-l4)] bg-[var(--dsw-alias-bg-module-platform)] px-2 py-2 text-[13px] text-[var(--dsw-alias-label-primary)]; }
+.list { @apply flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto; }
+.item { @apply min-w-0 rounded-lg border border-solid border-[var(--dsw-alias-border-l4)] p-3; }
+.choice { @apply flex min-w-0 items-start gap-2 text-[13px] text-[var(--dsw-alias-label-primary)]; }
+.choice span { @apply min-w-0 break-words; }
+.choice small { @apply mt-1 block text-xs text-[var(--dsw-alias-label-secondary)]; }
+.summary { @apply cursor-pointer py-2 text-[13px] text-[var(--dsw-alias-label-secondary)]; }
+.fields { @apply m-0 flex min-w-0 flex-col gap-3 border-0 p-0; }
+.error { @apply m-0 text-[13px] text-[var(--dsw-alias-label-error)]; }

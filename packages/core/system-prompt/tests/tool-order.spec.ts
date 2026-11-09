@@ -78,6 +78,17 @@ describe('SystemPrompt tool order', () => {
     expect(assembly.tools.map(t => t.description)).toEqual(['anchor', 'first', 'second'])
   })
 
+  it('allows scoped tool schema transforms before ordering and preserves downstream contributions', async () => {
+    const ctx = await mount()
+    ctx.systemPrompt.tools(() => ({ schemas: [tool('zulu'), tool('alpha')] }))
+    ctx.on('system-prompt/tool-schemas', async (_schemas, _context, next) => (
+      (await next()).map(schema => ({ ...schema, description: '像素坐标' }))
+    ))
+    expect((await ctx.systemPrompt.assemble()).tools.map(schema => [schema.name, schema.description]))
+      .toEqual([['alpha', '像素坐标'], ['zulu', '像素坐标']])
+    await ctx.fiber.dispose()
+  })
+
   it('keeps ordered provider declarations outside presentation transforms', async () => {
     const ctx = await mount()
     ctx.systemPrompt.tools(() => ({ schemas: [tool('zulu'), tool('alpha')] }))

@@ -1,4 +1,4 @@
-/** Independent work-details preferences backed by the same Host configuration form. */
+
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -9,41 +9,55 @@ import {
   type ChatSettings, type TranscriptViewMode,
 } from '../chat-settings.ts'
 
+
 /** Live work-details preference consumed by Chat and its Settings row. */
 export class TranscriptViewPolicy {
   private readonly unsubscribe: () => void
+
   /** Reactive current mode, including the client default before Host settings arrive. */
   readonly mode: SnapshotStore<TranscriptViewMode>
+
   /** Reactive collapse timing, defaulting to completion until Host settings arrive. */
   readonly collapseTiming: SnapshotStore<CollapseTiming> = createSnapshotStore<CollapseTiming>(DEFAULT_COLLAPSE_TIMING)
   /** Reactive folded-reply choice, keeping every reply until Host settings arrive. */
   readonly foldedReplies: SnapshotStore<FoldedReplies> = createSnapshotStore<FoldedReplies>(DEFAULT_FOLDED_REPLIES)
 
-  /**
-   * @param host - durable Chat settings scope.
-   * @param defaultMode - presentation used without an explicit saved mode.
-   */
+
+
+
+
   constructor(
     private readonly host: ConfigForm<ChatSettings>,
     private readonly defaultMode: TranscriptViewMode = DEFAULT_TRANSCRIPT_VIEW_MODE,
+    private readonly forceCompact = false,
   ) {
-    this.mode = createSnapshotStore(defaultMode)
+    this.mode = createSnapshotStore(forceCompact ? 'compact' : defaultMode)
     this.unsubscribe = host.subscribe(() => { this.adopt() })
     this.adopt()
   }
 
+
   /** Release the accepted-value subscription. */
   dispose(): void { this.unsubscribe() }
+
+
+
+
 
   /**
    * Publish and persist one explicit user choice.
    * @param mode - Compact, Standard, Detailed, or Verbose work details.
    */
   setMode(mode: TranscriptViewMode): void {
+    if (this.forceCompact) return
     if (this.mode.getSnapshot() === mode) return
     this.mode.set(mode)
     void this.host.set(TRANSCRIPT_VIEW_FIELD, mode)
   }
+
+
+
+
 
   /**
    * Publish and persist collapse timing without changing the work-details mode.
@@ -67,6 +81,7 @@ export class TranscriptViewPolicy {
 
   /** Adopt the latest accepted Host section without writing it back. */
   private adopt(): void {
+    if (this.forceCompact) return
     const section = this.host.getSnapshot().value
     if (section === undefined) return
     const saved = section.transcriptView

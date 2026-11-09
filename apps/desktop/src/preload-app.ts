@@ -4,7 +4,9 @@ import type { FileSaveResult } from '@deepseek-ai/dsh-client-ui-file-actions/typ
 import type { DesktopChannelState, DesktopChannelChangeResult } from '@deepseek-ai/dsh-client-ui-settings-general/types'
 import type { DesktopShortcutInput, ShortcutConfigSnapshot, ShortcutSaveResult } from '@deepseek-ai/dsh-client-shortcuts/protocol'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { DESKTOP_IPC, SCHEME, type DshDesktopProductApi, type DesktopUpdatePresentation } from './ipc.ts'
+import { DESKTOP_IPC, SCHEME, type DshDesktopProductApi, type DesktopUpdatePresentation, type OrbAvatarWriteResult, type OrbMillifractionWriteResult, type OrbSettingsSnapshot } from './ipc.ts'
+import type { OrbAgentModelSelection } from './orb-agent-models.ts'
+import type { TccRight } from './tcc.ts'
 import { PLATFORM_IPC } from './platform-ipc.ts'
 import { markDocumentPlatform, syncWindowFullscreen } from './preload-platform.ts'
 import { syncNativeTheme } from './preload-theme.ts'
@@ -83,6 +85,32 @@ function createProductApi(): DshDesktopProductApi {
         return () => { ipcRenderer.off(DESKTOP_IPC.updatesPresentation, handle) }
       },
     },
+    orb: {
+      publishSessionCatalog: catalog => ipcRenderer.invoke(DESKTOP_IPC.floatingCatalog, catalog) as Promise<void>,
+      onSessionNavigate(listener) {
+        const handle = (_event: Electron.IpcRendererEvent, request: unknown): void => { listener(request) }
+        ipcRenderer.on(DESKTOP_IPC.floatingNavigate, handle)
+        return () => { ipcRenderer.off(DESKTOP_IPC.floatingNavigate, handle) }
+      },
+      followSession: sessionId => ipcRenderer.invoke(DESKTOP_IPC.floatingFollowSession, sessionId) as Promise<void>,
+      supported: () => ipcRenderer.invoke(DESKTOP_IPC.orbSupported) as Promise<boolean>,
+      snapshot: () => ipcRenderer.invoke(DESKTOP_IPC.orbSnapshot) as Promise<OrbSettingsSnapshot>,
+      pickAvatar: () => ipcRenderer.invoke(DESKTOP_IPC.orbPickAvatar) as Promise<OrbAvatarWriteResult>,
+      restoreAvatar: () => ipcRenderer.invoke(DESKTOP_IPC.orbRestoreAvatar) as Promise<OrbSettingsSnapshot>,
+      setOverlayModel: (selection: OrbAgentModelSelection) => (
+        ipcRenderer.invoke(DESKTOP_IPC.orbSetOverlayModel, selection) as Promise<void>
+      ),
+      setBackgroundModel: (selection: OrbAgentModelSelection) => (
+        ipcRenderer.invoke(DESKTOP_IPC.orbSetBackgroundModel, selection) as Promise<void>
+      ),
+      setSelectionEnabled: (enabled: boolean) => (
+        ipcRenderer.invoke(DESKTOP_IPC.orbSetSelectionEnabled, enabled) as Promise<void>
+      ),
+      setMillifractionEnabled: (enabled: boolean) => (
+        ipcRenderer.invoke(DESKTOP_IPC.orbSetMillifractionEnabled, enabled) as Promise<OrbMillifractionWriteResult>
+      ),
+      openTcc: (right: TccRight) => ipcRenderer.invoke(DESKTOP_IPC.orbOpenTcc, right) as Promise<OrbSettingsSnapshot>,
+    },
   }
 }
 
@@ -104,9 +132,9 @@ if (location.protocol === `${SCHEME}:` && location.hostname === 'app') {
   contextBridge.exposeInMainWorld('__DSH_DIRECTORY_PICKER__', {
     pick: () => ipcRenderer.invoke(DESKTOP_IPC.directoryPick) as Promise<string | null>,
   })
-  // The composer cites dropped, picked, and pasted files and folders that
-  // have a real path as `@path` references instead of uploading them; a
-  // File without one (pasted bytes) answers '' and uploads as before.
+
+
+
   contextBridge.exposeInMainWorld('__DSH_HOST_PATHS__', {
     pathFor: (file: File) => webUtils.getPathForFile(file),
   })
@@ -124,7 +152,7 @@ if (location.protocol === `${SCHEME}:` && location.hostname === 'app') {
 markDocumentPlatform()
 syncWindowFullscreen()
 syncNativeTheme()
-// Main-process IPC also verifies the owning window and top frame.
+
 contextBridge.exposeInMainWorld('dshDesktop', location.protocol === `${SCHEME}:` && location.hostname === 'app' && process.isMainFrame ? createProductApi() : { protocolVersion: 1 })
 
 if (location.protocol === `${SCHEME}:` && location.hostname === 'app') {

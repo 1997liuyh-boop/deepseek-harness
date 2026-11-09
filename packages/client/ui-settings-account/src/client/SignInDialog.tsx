@@ -34,8 +34,8 @@ export function SignInDialog({ account, colorScheme, start, cancel, close, useAp
   const expired = phase === 'expired'
   const localFailure = failed || account.loginFailed || account.failed
   const error = localFailure || phase === 'failed'
-  const failureKey = !localFailure
-    && phase === 'failed' && attempt?.errorCode === 'no-response' ? 'noResponse' : 'failed'
+  const failures: Record<string, AccountKey> = { 'no-response': 'noResponse', network: 'networkFailure', 'access-blocked': 'accessBlocked', protocol: 'protocolFailure', storage: 'storageFailure', expired: 'timeoutDescription' }
+  const failureKey = !localFailure && phase === 'failed' ? failures[attempt?.errorCode ?? ''] ?? 'failed' : 'failed'
   const waiting = active && !error
   const committing = phase === 'committing'
   useEffect(() => { if (account.view?.status === 'credential-stored') close() }, [account.view?.status, close])

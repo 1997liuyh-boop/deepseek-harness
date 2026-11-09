@@ -1,5 +1,3 @@
-/** Workspace archive and directory UI capability. */
-
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { AccessEffect, RemoteEndpoint } from '@deepseek-ai/dsh-api-remote-access/client'
 import type { ClientRemote, DirectoryListing, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
@@ -11,9 +9,9 @@ import type {
   SessionTarget,
   SessionListState,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-// Type-only: pulls the `agentPreset` Session projection value into this program.
+
 import type {} from '@deepseek-ai/dsh-agent-preset-registry/types'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type {
   IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -32,43 +30,45 @@ interface MainSelection {
 
 /** Content preparation and Agent preset for the Session a Workspace flow opens. */
 export interface StartSessionOptions extends DraftInitializationOptions {
-  /** Agent preset the Session runs; the Host default when omitted. */
+
   readonly agentPreset?: string
 }
 
-/** Workspace archive and directory operations consumed by Client UI domains. */
+/** 主窗口的会话与工作区导航操作，以及新会话初始化入口。 */
 export interface UiWorkspace {
+
   /**
-   * Select a Session and show its Conversation as one UI navigation action.
-   * @param target - known Session identity or durable direct-parent subagent address to display.
+   * 选择目标会话，并在同一次界面导航中显示其对话。
+   * @param target - 已知会话身份，或可持久恢复的直属 subagent 地址。
    */
   openSession(target: SessionTarget): void
+
   /**
-   * Connect a Workspace and open its Session unless a later navigation supersedes it.
-   * @param workspaceId - target Workspace.
-   * @param beforeOpen - optional synchronous preparation for the selected Session,
-   * skipped after supersession; a throw aborts the open and releases the retained reference.
-   * @param options - choices for the Session the connection creates or reuses.
-   * @returns completion; a superseded request may create a Session but does not open it.
-   * @throws on failure; a refused creation is also shown through the Workspace
-   * notice unless a later navigation or disposal superseded the request.
+   * 连接工作区并打开其会话；后续导航可以取代本次打开。
+   * @param workspaceId - 目标工作区。
+   * @param beforeOpen - 选中前执行的可选同步准备；导航被取代后不执行，抛错时中止打开并释放新引用。
+   * @param options - 连接时创建或复用会话的选项。
+   * @returns 连接及打开准备完成；被取代的请求可能已创建会话，但不会打开它。
+   * @throws 连接或准备失败时抛出；创建被拒绝时还会显示工作区通知，除非后续导航或释放已取代本次请求。
    */
   openWorkspace(
     workspaceId: WorkspaceId,
     beforeOpen?: (sessionId: SessionId) => void,
     options?: Pick<StartSessionOptions, 'agentPreset'>,
   ): Promise<void>
+
   /**
-   * Fork a Session without changing the current selection.
-   * @param sessionId - source Session.
-   * @param onCreated - observer before the optional child-title update.
-   * @param options - optional permission to start source migration; omission preserves the Host default.
-   * @returns the child SessionId after creation and inherited-title increment.
+   * 从源会话创建 fork，保持当前选择不变。
+   * @param sessionId - 源会话身份。
+   * @param onCreated - 子会话创建后、可选标题更新前调用的观察函数。
+   * @param options - allowMigration 控制源格式迁移授权，readableHistory 请求可读历史副本；省略项沿用 Host 默认值。
+   * @returns 创建并完成继承标题处理后的子会话身份。
+   * @throws 创建失败、观察函数抛错或标题更新失败时拒绝；子会话可能已经创建。
    */
   forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration' | 'readableHistory'>,
   ): Promise<SessionId>
   /**
    * Resolve the Session for a new conversation in a Workspace: navigation names the first reusable
@@ -89,47 +89,59 @@ export interface UiWorkspace {
    * whether existing text or attachments are kept, replaced, or followed by the prompt.
    */
   startSession(workspaceId?: WorkspaceId, options?: StartSessionOptions): void
+
   /**
-   * Archive a Session and clear it when it is the current selection.
-   * @param sessionId - Session to archive.
-   * @param options - `stopActivity` asks the Host to stop the Session's running work instead of refusing.
+   * 归档会话；目标为当前选择时，在归档成功后清除选择。
+   * @param sessionId - 要归档的会话身份。
+   * @param options - 设置 stopActivity 后，请求 Host 停止运行中的工作，而非因运行状态拒绝归档。
+   * @returns 归档及必要的选择清理完成。
    */
   archiveSession(sessionId: SessionId, options?: { readonly stopActivity?: boolean }): Promise<void>
+
   /**
-   * Unarchive a Session, restoring it to its recorded Workspace position.
-   * @param sessionId - Session to unarchive.
+   * 取消归档，将会话恢复到记录的工作区位置。
+   * @param sessionId - 要取消归档的会话身份。
+   * @returns Host 完成取消归档。
    */
   unarchiveSession(sessionId: SessionId): Promise<void>
+
   /**
-   * Pin a Session on the Host, then lead it in its accounts' saved orders
-   * (its Workspace group or Ungrouped, and the flat list). The order write
-   * reads the memberships current at completion, so reorders that landed
-   * while the Host call was pending keep their positions.
-   * @param sessionId - Session to pin.
+   * 在 Host 置顶会话，再将其移到所属工作区或未分组列表及平铺列表的已保存顺序首位。
+   * 排序写入读取 Host 调用完成时的分组归属，保留调用等待期间已提交的其他排序。
+   * @param sessionId - 要置顶的会话身份。
+   * @returns Host 置顶及本地已保存顺序更新完成。
    */
   pinSession(sessionId: SessionId): Promise<void>
+
   /**
-   * Unpin a Session on the Host; saved positions stay as they are.
-   * @param sessionId - Session to unpin.
+   * 在 Host 取消置顶，保留已保存的排序位置。
+   * @param sessionId - 要取消置顶的会话身份。
+   * @returns Host 完成取消置顶。
    */
   unpinSession(sessionId: SessionId): Promise<void>
+
   /**
-   * Open the Host-native directory picker.
-   * @returns the selected directory, or null when cancelled.
+   * 打开 Host 的原生目录选择器。
+   * @returns 选中的目录；用户取消时返回 null。
+   * @throws 目录选择请求失败时拒绝。
    */
   pickDirectory(): Promise<string | null>
+
   /**
-   * List one Host directory level.
-   * @param path - directory path; absent selects the Host home.
-   * @param signal - cancellation for a superseded scan.
-   * @returns directory entries and breadcrumb ancestry.
+   * 列出 Host 上一个目录层级的内容。
+   * @param path - 目录路径；省略时使用 Host 用户主目录。
+   * @param signal - 用于取消被后续扫描取代的请求。
+   * @returns 目录条目及面包屑祖先信息。
+   * @throws Host 目录操作失败时以 DirectoryBrowseError 拒绝。
    */
   listDirectory(path?: string, signal?: AbortSignal): Promise<DirectoryListing>
+
   /**
-   * Create a child directory.
-   * @param path - existing parent directory.
-   * @param name - child directory name.
-   * @returns created absolute path.
+   * 在已有父目录下创建子目录。
+   * @param path - 已有父目录的路径。
+   * @param name - 子目录名称。
+   * @returns 创建目录的绝对路径。
+   * @throws Host 目录操作失败时以 DirectoryBrowseError 拒绝。
    */
   createDirectory(path: string, name: string): Promise<string>
   /**
@@ -147,7 +159,7 @@ export interface UiWorkspace {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Cross-Controller Workspace navigation and directory UI capability. */
+
     uiWorkspace: UiWorkspace
   }
 }
@@ -156,7 +168,6 @@ declare module '@deepseek-ai/cordis' {
 export class DirectoryBrowseError extends Error {
   override readonly name = 'DirectoryBrowseError'
 
-  /** @param rpcError - Host directory business failure. */
   constructor(readonly rpcError: RemoteFailure) {
     super(`directory browse failed: ${rpcError.code}: ${rpcError.message}`)
   }
@@ -164,26 +175,16 @@ export class DirectoryBrowseError extends Error {
 
 /** Implements Workspace archive and directory UI operations. */
 class UiWorkspaceService extends Service implements UiWorkspace {
-  /** The latest in-flight connection per Workspace; a request joins it only when both name the same preset. */
+
   private readonly connecting = new Map<WorkspaceId, {
     readonly agentPreset: string | undefined
     readonly attempt: Promise<SessionId>
   }>()
   private readonly lifetime = new AbortController()
-  private readonly selection = createSnapshotStore<MainSelection>(
-    {}, { persist: { name: 'dsh.sessions.current' } },
-  )
+  private readonly selection: SnapshotStore<MainSelection>
   private mainReference: SessionReference | undefined
   private restorationNavigation: AbortSignal | undefined
 
-  /**
-   * @param ctx - Client root Context.
-   * @param directoryPicker - the directory-picking Remote namespace.
-   * @param workspaces - pure Workspace Controller.
-   * @param sessions - pure Session Controller.
-   * @param view - the browser's viewing-store write set (one instance shared with its registration).
-   * @param notify - show one notice through the Workspace notice channel.
-   */
   constructor(
     ctx: Context,
     private readonly directoryPicker: ClientRemote['directoryPicker'],
@@ -193,7 +194,21 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     private readonly notify: (toast: RowToast) => void,
   ) {
     super(ctx, 'uiWorkspace')
+    this.selection = createSnapshotStore<MainSelection>(
+      {}, sessions.surface === 'overlay' ? undefined : { persist: { name: 'dsh.sessions.current' } },
+    )
+    ctx.effect(() => sessions.list.subscribe(() => {
+      if (sessions.list.getSnapshot().phase !== 'pending') return
+      ctx.layout.beginNavigation()
+      this.connecting.clear()
+      const reference = this.mainReference
+      this.mainReference = undefined
+      reference?.release()
+      this.selection.update(({ sessionId: _sessionId, subagentAddress: _subagentAddress, ...state }) => state)
+    }), 'ui-workspace: 清理旧历史库的选择与导航')
     ctx.effect(() => {
+      // 悬浮球独立维护当前会话，避免恢复主窗口的选择。
+      if (sessions.surface === 'overlay') return () => {}
       const stop = this.watchNavigation()
       return () => {
         stop()
@@ -249,11 +264,6 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     })
   }
 
-  /**
-   * Create through the Host. A named blank the Host declined may still read as
-   * blank from stale cached list metadata, which hides it from the Session tree;
-   * its projections are reloaded so the row reflects its log.
-   */
   private async createNamed(request: {
     readonly workspaceId: WorkspaceId
     readonly sessionId?: SessionId
@@ -269,13 +279,6 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     return sessionId
   }
 
-  /**
-   * Reopen a saved blank Session under the preset its log recorded, or under
-   * the Host default once that preset no longer activates. Listed values are
-   * cached hints that can lag the log after an unclean Host exit, so the
-   * Session's projections are reloaded before the preset is read; a Session
-   * that still awaits a format migration reloads only those cached hints.
-   */
   private async restoreBlank(workspaceId: WorkspaceId, sessionId: SessionId): Promise<SessionId> {
     await this.sessions.refreshProjections(sessionId)
     const recorded = this.sessions.list.getSnapshot().byId[sessionId]?.projectionValues?.agentPreset
@@ -312,8 +315,7 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     try {
       sessionId = await this.connectBlank(workspaceId, reuse)
     } catch (error: unknown) {
-      // Reported here, not in connectWorkspace: startup restoration calls that
-      // directly and stays console-only.
+
       if (!navigation.aborted) this.notify({ kind: 'createFailed', message: creationFailureMessage(error) })
       throw error
     }
@@ -324,13 +326,14 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   async forkSession(
     sessionId: SessionId,
     onCreated?: (childId: SessionId) => void,
-    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration'>,
+    options?: Pick<Parameters<ISessions['fork']>[0], 'allowMigration' | 'readableHistory'>,
   ): Promise<SessionId> {
     return this.sessions.fork({
       sessionId,
       increaseTitle: true,
       ...onCreated === undefined ? {} : { onCreated },
       ...options?.allowMigration === undefined ? {} : { allowMigration: options.allowMigration },
+      ...options?.readableHistory === undefined ? {} : { readableHistory: options.readableHistory },
     })
   }
 
@@ -503,7 +506,6 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
   }
 
-  /** @returns true when an archived current selection was cleared. */
   private clearArchivedCurrent(): boolean {
     const current = this.mainReference?.sessionId
     if (current === undefined
@@ -554,26 +556,16 @@ class UiWorkspaceService extends Service implements UiWorkspace {
 
 }
 
-/**
- * `error` as the Session Controller's creation failure, or undefined when it
- * is not one. Client plugin bundles do not share error-class identity, so the
- * name decides.
- */
 function sessionCreateErrorOf(error: unknown): SessionCreateError | undefined {
   return error instanceof Error && error.name === 'SessionCreateError' ? error as SessionCreateError : undefined
 }
 
-/**
- * The words a failed Session creation is reported in: a Host refusal keeps its
- * stable code and message; any other failure keeps its own message.
- */
 function creationFailureMessage(error: unknown): string {
   const refused = sessionCreateErrorOf(error)
   if (refused !== undefined) return `${refused.rpcError.code}: ${refused.rpcError.message}`
   return error instanceof Error ? error.message : String(error)
 }
 
-/** Stable tie-breaking follows Host Workspace order. */
 function recentWorkspace(
   workspaces: readonly WorkspaceView[],
   sessions: SessionListState['byId'],

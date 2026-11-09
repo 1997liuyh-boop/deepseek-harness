@@ -52,11 +52,12 @@ function rowId(providerId: string, modelId: string): string {
 function optionsOf(directory: ModelDirectoryState, t: TranslateNS<'model'>): SelectOption[] {
   const rows: SelectOption[] = []
   for (const group of orderModelProviders(directory.groups)) {
-    const name = group.id === 'deepseek-account' ? t('provider.account') : group.name
+    const name = group.id === 'deepseek-account' ? t('provider.account') : group.id === 'dsh-routing' ? t('provider.routing') : group.name
     for (const model of group.models) {
       rows.push({
         id: rowId(group.id, model.id),
-        label: model.name,
+        label: group.id === 'dsh-routing' && model.id === 'aggregate' ? t('routing.aggregate')
+          : group.id === 'dsh-routing' && model.id === 'system' ? t('routing.system') : model.name,
         group: { name: group.id, label: name },
         ...(directory.current !== null
           && directory.current.provider === group.id

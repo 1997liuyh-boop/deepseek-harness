@@ -2628,6 +2628,28 @@ describe('ChatView', () => {
     expect(view.queryByRole('button', { name: '去充值' })).toBeNull()
   })
 
+  it('从加密历史错误创建可读分支，失败后保留原会话并允许重试', async () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), turnError(2, 'REPLAY_INCOMPATIBLE')] })
+    h.forkAt.mockRejectedValueOnce(new Error('fork unavailable')).mockResolvedValueOnce(undefined)
+    const view = render(<h.ChatView {...h.props} />)
+    const button = view.getByRole('button', { name: '从可读历史继续' })
+    fireEvent.click(button)
+    expect(button.getAttribute('disabled')).not.toBeNull()
+    await waitFor(() => { expect(view.getByRole('alert')).toBeTruthy() })
+    expect(h.forkAt).toHaveBeenCalledWith(2, true)
+    expect(view.getByText('try')).toBeTruthy()
+    fireEvent.click(button)
+    await waitFor(() => { expect(view.queryByRole('alert')).toBeNull() })
+    expect(h.forkAt).toHaveBeenCalledTimes(2)
+  })
+
+  it('没有分支权限时隐藏可读历史操作', () => {
+    const h = makeHarness({ nodes: [user(1, 'try'), turnError(2, 'REPLAY_INCOMPATIBLE')] })
+    Object.assign(h.props, { useAccess: (endpoint: string) => endpoint !== 'session/fork' })
+    const view = render(<h.ChatView {...h.props} />)
+    expect(view.queryByRole('button', { name: '从可读历史继续' })).toBeNull()
+  })
+
   it('renders the max-tokens notice with localized guidance, distinct from turn errors', () => {
     const h = makeHarness({ nodes: [user(1, 'try'), assistant(2, 'truncated'), turnMaxTokens(3)] })
     const view = render(<h.ChatView {...h.props} />)

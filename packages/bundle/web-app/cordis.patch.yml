@@ -599,3 +599,9 @@
       name: '@deepseek-ai/dsh-agent-preset-registry'
       config:
         default: standard
+
+- insert:
+    - id: ui-overlay-chat
+      name: '@deepseek-ai/dsh-client-ui-overlay-chat'
+    - id: ui-settings-orb
+      name: '@deepseek-ai/dsh-client-ui-settings-orb'

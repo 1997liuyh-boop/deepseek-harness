@@ -652,7 +652,7 @@ describe('endpoint interrogation', () => {
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
-      { id: 'kept', contextWindow: 111 },
+      { id: 'kept', contextWindow: 111, input: ['text', 'image'] },
       { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh', input: ['text', 'image'] },
     ])
   })
@@ -784,7 +784,7 @@ describe('endpoint interrogation', () => {
     const scripted = scriptedFace()
     render(
       <CustomProviderCard
-        taken={[]} protocols={PROTOCOLS} reasoningLevels={LEVELS} revision={7} operations={operationsWith(scripted.face)}
+        taken={[]} protocols={PROTOCOLS} revision={7} operations={operationsWith(scripted.face)}
         t={t} readOnly={false} onClose={vi.fn()}
       />,
     )
@@ -963,7 +963,6 @@ describe('hand-declared providers', () => {
       <CustomProviderCard
         taken={['openai']}
         protocols={PROTOCOLS}
-        reasoningLevels={LEVELS}
         revision={7}
         operations={operationsWith(scripted.face)}
         t={t}
@@ -988,6 +987,48 @@ describe('hand-declared providers', () => {
     expect(mutate).toHaveBeenCalledOnce()
     expect(set).toHaveBeenCalledOnce()
     expect(initialize).not.toHaveBeenCalled()
+  })
+
+  it('新建自定义模型时保留容量和输入类型，隐藏思考程度设置', () => {
+    mountCard()
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expandModel(1)
+
+    expect(screen.getByLabelText(`${en.contextWindow} 1`)).toBeTruthy()
+    expect(screen.getByRole('group', { name: `${en.modelInputTypes} 1` })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: `${en.modelReasoning} 1` })).toBeNull()
+  })
+
+  it.each([true, false])('编辑模型隐藏思考程度并保留原能力声明（自定义提供商：%s）', async (declared) => {
+    const model = { id: 'acme-large', reasoningEfforts: { off: null, high: 'deep' }, input: ['text'] }
+    const { mutate } = await mountSection({
+      providers: { 'acme-gateway': { api: 'openai-completions', models: [model] } },
+      declaredRoutes: declared ? ['acme-gateway'] : [],
+    })
+    openEditor('acme-gateway')
+    expandModel(1)
+
+    expect(screen.queryByRole('group', { name: `${en.modelReasoning} 1` })).toBeNull()
+    const row = screen.getByLabelText(`${en.modelId} 1`).closest('[data-row-key]')
+    expect([...row!.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input,select')].map(control =>
+      control.getAttribute('aria-label') ?? control.labels?.[0]?.textContent?.trim(),
+    )).toMatchInlineSnapshot(`
+      [
+        "Model ID 1",
+        "Display name 1",
+        "Context window 1",
+        "Max output tokens 1",
+        "Text",
+        "Image",
+      ]
+    `)
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Renamed model' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalledTimes(1) })
+    expect(firstMutate(mutate).ops).toEqual([
+      { op: 'set', path: ['providers', 'acme-gateway', 'models'], value: [{ ...model, name: 'Renamed model' }] },
+    ])
   })
 
   it('writes the whole profile and the key under the derived reference', async () => {
@@ -1185,10 +1226,9 @@ describe('hand-declared providers', () => {
 
   it.each([
     ['blocks a hand-declared route', true],
-    ['leaves a catalog route to the adapter', false],
+    ['blocks a catalog route', false],
   ])('%s whose stored reasoning levels the adapter refuses', async (_label, declared) => {
-    // Only a hand-declared route's rows edit reasoning levels, so only there
-    // can the card name the row and offer the switch that repairs it.
+    // 目录供应商同样允许编辑并修复逐模型声明。
     await mountSection({
       providers: {
         'acme-gateway': {
@@ -1201,8 +1241,8 @@ describe('hand-declared providers', () => {
     openEditor('acme-gateway')
 
     const refusal = `${en.model} 1: ${en.modelReasoningNeedsLevel}`
-    expect(screen.queryByText(refusal) !== null).toBe(declared)
-    expect(buttonNamed(en.apply).disabled).toBe(declared)
+    expect(screen.queryByText(refusal)).not.toBeNull()
+    expect(buttonNamed(en.apply).disabled).toBe(true)
   })
 
   it('retries only the key after the profile landed, and reports the provider on cancel', async () => {

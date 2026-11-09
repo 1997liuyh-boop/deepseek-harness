@@ -15,6 +15,7 @@ import type { SessionBinding, SessionListState } from '../sessions/service.ts'
 import type { SessionFace } from './session.ts'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionReferenceSource } from '../index.ts'
+import type { OverlayClientBridge } from '../overlay-surface.ts'
 
 export type { AgentContext } from '../scope.ts'
 
@@ -47,6 +48,10 @@ export interface SessionRetainInfo {
 
 /** The sessions-service face injected as `ctx.sessions`. */
 export interface ISessions {
+  /** 当前页面的会话表面；查询参数未选择悬浮球时为 main。 */
+  readonly surface: 'main' | 'overlay'
+  /** 桌面外壳通知与会话身份解析，通过已注入的服务访问。 */
+  readonly overlay: OverlayClientBridge
   /** Host catalog and local reference-source counts; navigation belongs to view owners. */
   readonly list: ObservableSnapshot<SessionListState>
   /**
@@ -140,6 +145,8 @@ export interface ISessions {
     onCreated?: (childId: SessionId) => void
     /** False refuses source migration; omission preserves the Host default. */
     allowMigration?: boolean
+    /** 用户明确选择只带可读历史的副本，保留原会话。 */
+    readableHistory?: boolean
   }): Promise<SessionId>
   /**
    * Borrow an already-retained Agent-scoped Context without extending its lifetime.

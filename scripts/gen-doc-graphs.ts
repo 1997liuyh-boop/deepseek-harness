@@ -300,6 +300,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Adapters register provider implementations; the loop and compaction call the provider-neutral stream service.',
   },
   {
+    key: 'llmRouting',
+    pkg: 'llm-routing',
+    title: 'Conversation model routing',
+    mode: 'service',
+    consumers: ['api-session-controller'],
+    note: 'Resolves direct or captured sequential-failover routes before prompt assembly and schedules bounded recovery through existing adapters.',
+  },
+  {
     key: 'sessionLogDeepSeek',
     pkg: 'session-log-deepseek',
     title: 'Session-log upload policy',
@@ -339,6 +347,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['agent-loop', 'agent', 'session-persistence', 'session-query', 'session-query-sqlite', 'subagent', 'message-feedback'],
     note: 'Owns append-only Session instances and emits the durable session event feed.',
+  },
+  {
+    key: 'sessionLibrary',
+    pkg: 'session-library',
+    title: 'Account-owned local history',
+    mode: 'service',
+    consumers: ['api-session-controller'],
+    note: 'Enforces account-library access through sessions.access and commits verified ownership imports or restores without rewriting Session logs.',
   },
   {
     key: 'speechController',
@@ -388,6 +404,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Host settings-surface Remote controller',
     mode: 'core',
     note: 'Projects the user-settings seam onto the generated Remote namespace: the read is always redacted and every refusal is classified here, not on the seam Definition.',
+  },
+  {
+    key: 'ccSwitchImport',
+    pkg: 'client-ui-settings-models',
+    title: 'CC Switch provider import',
+    mode: 'service',
+    consumers: ['client-ui-settings-models'],
+    note: 'Reads CC Switch configuration without changing the source, keeps credentials on the Host, and imports confirmed providers through settings and credentials.',
   },
   {
     key: 'workspaceFiles',

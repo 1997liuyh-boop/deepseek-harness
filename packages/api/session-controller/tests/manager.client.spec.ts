@@ -51,6 +51,25 @@ function makeManager(
 }
 
 describe('SessionManager instances', () => {
+  it('discards create, fork and rename responses from the previous history library', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote)
+    onTestFinished(() => manager.dispose())
+    const created = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.create>>>()
+    const forked = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.fork>>>()
+    const renamed = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.rename>>>()
+    remote.session.create.mockReturnValueOnce(created.promise)
+    remote.session.fork.mockReturnValueOnce(forked.promise)
+    remote.session.rename.mockReturnValueOnce(renamed.promise)
+    const operations = [manager.create({}), manager.fork({ sessionId: S1 }), manager.rename(S1, 'old title')]
+    manager.handleLibraryChanged()
+    created.resolve(ok({ sessionId: S1 }))
+    forked.resolve(ok({ sessionId: S2 }))
+    renamed.resolve(ok({ title: 'old title', seq: 1 }))
+    for (const outcome of await Promise.all(operations)) {
+      expect(outcome).toMatchObject({ ok: false, error: { code: 'gateway/cancelled' } })
+    }
+    expect(manager.getListSnapshot().items).toEqual([])
+  })
   it.for(['event', 'list'] as const)(
     'forgets running when an unretained identity disappears through a %s',
     async (source, { mock, remote }) => {

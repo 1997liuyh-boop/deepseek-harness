@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`sessions.access` 合并可释放的可见性策略，并在通知消费者前取消旧代信号。业务读取与命令遵守这些策略，原始持久化保留为维护接口；没有安装策略时，默认注册表允许访问。
+
 在必须存在会话的任何地方挂载 `dsh-session`。它在内存中创建并持有事件溯源的 `Session` 实例；持久存储由订阅 `session/event` 流的持久化插件叠加。
 
 ### 创建与检查会话

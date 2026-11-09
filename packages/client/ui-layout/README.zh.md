@@ -58,6 +58,8 @@ Windows Electron 的 `data-windows-titlebar` 标记在所有列上方预留顶�
 <details>
 <summary>实现细节——点击展开</summary>
 
+注入的 `sessions` 服务识别悬浮球文档。在该表面上，本插件跳过 AppFrame，并通过 `sessions.overlay` 接收外壳的主题消息。
+
 root 注册通过注入的可观察源提供横屏折叠状态，由渲染器负责媒体查询订阅，AppFrame 只通过绑定的 hook 读取快照。在没有浏览器媒体 API 的环境中运行客户端注册时，使用常规布局。
 
 `selectPanel(id)` 在改变选中态前检查实时 `main` 注册表；缺失的 key 会抛错并保留当前面板。`beginNavigation()` 为异步 UI 导航返回 abort signal。后续调用、有效面板选择（包括重复选择）或布局释放会中止该 signal，但不取消底层会话创建。消费方在提交导航或搬移草稿前检查 signal。

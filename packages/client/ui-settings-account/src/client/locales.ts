@@ -24,6 +24,10 @@ export const en = {
   completing: 'Completing sign in…', expired: 'Sign in expired. Try again.',
   failed: 'Could not complete the operation. Try again.',
   noResponse: 'Something went wrong. Please check your network connection and try again.',
+  networkFailure: 'The DeepSeek sign-in service is unavailable. Check your network and sign in again.',
+  accessBlocked: 'DeepSeek requires access verification. Complete it in the verification window, or check your proxy and retry.',
+  protocolFailure: 'DeepSeek did not complete this authorization. Close the previous sign-in page and sign in again.',
+  storageFailure: 'The authorization could not be saved on this computer. Check disk access and sign in again.',
   settingsSignedOutTitle: 'You are not signed in to DeepSeek Harness',
   settingsSignedOutDescription: 'Sign in to DeepSeek Harness to get your dedicated API Key',
   signInDescription: 'Use your DeepSeek account to get started.',
@@ -60,6 +64,10 @@ export const zh: Record<AccountKey, string> = {
   completing: '正在完成登录…', expired: '登录已过期，请重试。',
   failed: '操作未完成，请重试。',
   noResponse: '操作未完成，可能是网络异常，请检查你的网络状况后重试',
+  networkFailure: '暂时无法连接 DeepSeek 登录服务，请检查网络后重新登录',
+  accessBlocked: 'DeepSeek 要求访问验证，请在验证窗口完成验证，或检查代理后重试',
+  protocolFailure: 'DeepSeek 未完成本次授权，请关闭之前的登录页后重新登录',
+  storageFailure: '授权未能保存到本机，请检查磁盘访问权限后重新登录',
   settingsSignedOutTitle: '当前未登录 DeepSeek Harness 账号',
   settingsSignedOutDescription: '登录 DeepSeek Harness 账号获取专属 API Key',
   signInDescription: '登录 DeepSeek 账号以开始使用',
@@ -74,6 +82,7 @@ export const zh: Record<AccountKey, string> = {
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  ...en,
   ...onboardingJa,
   'modelSignInRequired': 'モデルを利用できません。ログインしてから再試行してください。',
   'sessionExpired': 'アカウントからログアウトしました。もう一度ログインしてください。',
@@ -134,6 +143,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  ...en,
   modelSignInRequired: 'Modelo no disponible. Por favor inicia sesión y vuelve a intentarlo.',
   sessionExpired: 'Has cerrado sesión en tu cuenta, inicia sesión nuevamente.',
   ...onboardingEs,
@@ -169,6 +179,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  ...en,
   modelSignInRequired: 'Modèle indisponible. Veuillez vous connecter et réessayer.',
   sessionExpired: 'Vous vous êtes déconnecté de votre compte, veuillez vous reconnecter.',
   ...onboardingFr,
@@ -204,6 +215,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  ...en,
   modelSignInRequired: 'Modell nicht verfügbar. Bitte melden Sie sich an und versuchen Sie es erneut.',
   sessionExpired: 'Sie haben sich von Ihrem Konto abgemeldet. Bitte melden Sie sich erneut an.',
   ...onboardingDe,
@@ -239,6 +251,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  ...en,
   modelSignInRequired: 'Модель недоступна. Пожалуйста, войдите в систему и повторите попытку.',
   sessionExpired: 'Вы вышли из своей учетной записи, пожалуйста, войдите снова.',
   ...onboardingRu,
@@ -274,6 +287,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  ...en,
   modelSignInRequired: 'Modelo indisponível. Faça login e tente novamente.',
   sessionExpired: 'Você saiu da sua conta, faça login novamente.',
   ...onboardingPt,

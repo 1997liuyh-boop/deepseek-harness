@@ -67,3 +67,24 @@ it.each(['win32', 'linux'] as const)('leaves system authorization to Chromium on
   expect(done).toHaveBeenCalledWith(true)
   expect(access.askForMediaAccess).not.toHaveBeenCalled()
 })
+
+it('已选来源的采集窗口可共享屏幕，但不能请求摄像头、麦克风或从子框架发起', () => {
+  const capture = {} as WebContents
+  const request = vi.fn<Session['setPermissionRequestHandler']>()
+  const allowed = vi.fn(() => true)
+  installMicrophonePermissions(
+    { setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: request }, () => undefined,
+    contents => contents === capture && allowed(),
+  )
+  const handler = request.mock.calls[0]![0]!, done = vi.fn()
+  const details = { isMainFrame: true, requestingUrl: 'dsh-app://shell/capture.html?mode=video', mediaTypes: [] as ('audio' | 'video')[] }
+  handler(capture, 'media', done, details)
+  expect(done).toHaveBeenLastCalledWith(true)
+  for (const rejected of [{ ...details, mediaTypes: ['video'] }, { ...details, mediaTypes: ['audio'] }, { ...details, isMainFrame: false }, { ...details, requestingUrl: 'https://example.com/' }]) {
+    handler(capture, 'media', done, rejected)
+    expect(done).toHaveBeenLastCalledWith(false)
+  }
+  allowed.mockReturnValue(false)
+  handler(capture, 'media', done, details)
+  expect(done).toHaveBeenLastCalledWith(false)
+})

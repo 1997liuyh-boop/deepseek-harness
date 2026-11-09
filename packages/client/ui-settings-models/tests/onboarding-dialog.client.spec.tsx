@@ -76,6 +76,7 @@ function harness(options: {
   settingsWritable?: boolean
   providersFailure?: string
   setFailure?: string
+  discoveryFailure?: string
 } = {}) {
   if (document.getElementById('root') === null) {
     const appRoot = document.createElement('div')
@@ -111,7 +112,8 @@ function harness(options: {
             settingsPath: [],
           }],
       )),
-      discoverModels: () => Promise.resolve(remoteOk([])),
+      discoverModels: () => Promise.resolve(options.discoveryFailure === undefined
+        ? remoteOk([{ id: 'deepseek-flash' }]) : remoteFail(options.discoveryFailure)),
     },
     settings: {
       describe: () => Promise.resolve(remoteOk({
@@ -313,5 +315,27 @@ it('keeps explicit API key setup available when automatic onboarding is disabled
   h.props.explicit = true
   render(<DeepSeekOnboardingDialog {...h.props} />)
   await waitFor(() => { expect(screen.getByRole('dialog')).toBeTruthy() })
+  expect(h.complete).not.toHaveBeenCalled()
+})
+
+it('显式添加密钥保存成功后结束弹窗', async () => {
+  const h = harness()
+  h.props.explicit = true
+  render(<DeepSeekOnboardingDialog {...h.props} />)
+  await screen.findByRole('dialog')
+  fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-live' } })
+  fireEvent.click(screen.getByRole('button', { name: en.onboardingSave }))
+  await waitFor(() => { expect(h.complete).toHaveBeenCalledOnce() })
+})
+
+it('供应商拒绝密钥时保留输入且不覆盖原凭据', async () => {
+  const h = harness({ discoveryFailure: 'Key rejected by provider' })
+  h.props.explicit = true
+  render(<DeepSeekOnboardingDialog {...h.props} />)
+  await screen.findByRole('dialog')
+  fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-rejected' } })
+  fireEvent.click(screen.getByRole('button', { name: en.onboardingSave }))
+  expect(await screen.findByText('Key rejected by provider')).toBeTruthy()
+  expect(h.set).not.toHaveBeenCalled()
   expect(h.complete).not.toHaveBeenCalled()
 })

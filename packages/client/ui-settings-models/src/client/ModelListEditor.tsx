@@ -74,9 +74,9 @@ export interface ModelListEditorProps {
   /** Installed provider whose catalog supplies defaults without endpoint I/O. */
   catalogProvider?: string | undefined
   /**
-   * Reasoning levels a hand-declared route's rows may declare in
+   * Reasoning levels third-party model rows may declare in
    * `reasoningEfforts`, in escalation order; absent or empty shows no
-   * reasoning control, leaving a catalog model's levels to the catalog.
+   * reasoning control. An unedited model inherits its catalog declaration.
    */
   reasoningLevels?: readonly string[] | undefined
   /** Route input types for models absent from the installed catalog. */
@@ -268,7 +268,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const emptiesList = models.length > 0 && keptRows.length === 0 && addedRows.length === 0
 
   const adoptPicked = (): void => {
-    onChange([...keptRows, ...addedRows])
+    onChange([...keptRows.map((row) => { const candidate = activeCandidates.find(item => item.id === textOf(row, 'id')); return candidate === undefined ? row : { ...adopt(candidate), ...row } }), ...addedRows])
     rowState.forget(removedRows)
     closePicker()
   }

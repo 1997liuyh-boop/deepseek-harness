@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsRenderFactories, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { UserTextFacts } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, JsonBlock, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps, UserContentAttachment, UserContentData, UserContentInput,
 } from '../contract/slots.ts'
@@ -57,7 +57,24 @@ function failureMessage(
   if (code === 'INTERRUPTED') return t('message.failure.interrupted')
   if (code === 'ACCOUNT_SIGN_IN_REQUIRED') return t('message.failure.accountSignInRequired')
   if (code === 'QUOTA' || code === 'ACCOUNT_QUOTA') return t('message.failure.quota')
+  if (code === 'REPLAY_INCOMPATIBLE') return t('message.failure.replay')
+  if (code === 'ROUTING_INPUT_UNSUPPORTED') {
+    // 带上被拒绝的候选，用户能直接对照聚合队列里哪一项不支持图片。
+    const model = /^Model (\S+) does not accept/.exec(message)?.[1]
+    return model === undefined ? t('message.failure.routingInput') : `${t('message.failure.routingInput')} (${model})`
+  }
   return code === 'AUTH' ? t('message.failure.auth') : message
+}
+
+function retryTarget(policyKey: string): string | undefined {
+  let value: unknown
+  try { value = JSON.parse(policyKey) }
+  catch (_error: unknown) { return undefined /* 普通供应商策略不含路由目标。 */ }
+  if (typeof value !== 'object' || value === null || !('routing' in value) || !('target' in value)) return undefined
+  const target = value.target
+  return typeof target === 'object' && target !== null && 'provider' in target && 'model' in target
+    && typeof target.provider === 'string' && typeof target.model === 'string'
+    ? `${target.provider} / ${target.model}` : undefined
 }
 
 function ModelRetryItem({ node, active, t }: {
@@ -70,6 +87,7 @@ function ModelRetryItem({ node, active, t }: {
   const deadline = useMemo(() => Date.now() + node.delayMs, [node.delayMs, node.seq])
   const scheduledSeconds = retrySeconds(node.delayMs)
   const maximum = node.mode === 'normal' ? node.maxRetries : '∞'
+  const target = retryTarget(node.policyKey)
   const [countdown, setCountdown] = useState<RetryCountdown>(() => ({
     deadline,
     seconds: retrySeconds(deadline - Date.now()),
@@ -115,6 +133,7 @@ function ModelRetryItem({ node, active, t }: {
         </span>
       </summary>
       <div className={css.retryDetails}>
+        {target === undefined ? null : <div><span className={css.retryDetailLabel}>{t('message.retry.target')}</span>{target}</div>}
         <div>
           <span className={css.retryDetailLabel}>{t('message.retry.delay')}</span>
           {t('duration.milliseconds', { milliseconds: Math.round(node.delayMs) })}
@@ -129,16 +148,28 @@ function ModelRetryItem({ node, active, t }: {
 }
 
 /** Persistent, turn-positioned feedback for a terminal failure. */
-function TurnErrorItem({ node, t }: {
+function TurnErrorItem({ node, t, forkAt, forkAllowed }: {
   node: TurnErrorNode
   t: ChatViewSlotProps['t']
-}) {
+  forkAllowed: boolean
+} & Pick<ChatNodeOwnerProps, 'forkAt'>) {
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
   return (
     <div className={css.turnErrorRow} role="status">
       <StateDot state="error" className={css.turnErrorDot} />
       <div className={css.turnErrorCopy}>
         <span className={css.turnErrorTitle}>{node.code === 'ACCOUNT_SIGNED_OUT' || node.code === 'INTERRUPTED' ? t('message.taskStopped') : t('message.turnError')}</span>
         <span className={css.turnErrorMessage}>{failureMessage(node.message, node.code, t)}</span>
+        {node.code === 'REPLAY_INCOMPATIBLE' && forkAllowed ? <div>
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => {
+            if (busy) return
+            setBusy(true); setFailed(false)
+            void Promise.resolve().then(() => forkAt(node.seq, true))
+              .catch((_forkError: unknown) => { setFailed(true) }).finally(() => { setBusy(false) })
+          }}>{t('message.replay.continue')}</Button>
+          {failed ? <span role="alert" className={css.turnErrorMessage}>{t('message.replay.failed')}</span> : null}
+        </div> : null}
       </div>
       {node.code !== undefined && node.code !== 'INTERRUPTED' && <code className={css.turnErrorCode}>{node.code}</code>}
     </div>
@@ -386,8 +417,9 @@ export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeVi
 })
 
 /** Terminal turn-error keyed Chat renderer. */
-export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, t }: ChatNodeViewProps<'turn-error'>) {
-  return <TurnErrorItem node={node.data} t={t} />
+export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, t, forkAt, useAccess }: ChatNodeViewProps<'turn-error'>) {
+  const forkAllowed = useAccess('session/fork')
+  return <TurnErrorItem node={node.data} t={t} forkAt={forkAt} forkAllowed={forkAllowed} />
 })
 
 /** Max-tokens turn-end notice keyed Chat renderer. */

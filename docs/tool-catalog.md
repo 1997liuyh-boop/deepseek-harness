@@ -15,6 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-tool-computer-use` | `click`, `drag`, `hotkey`, `input_text`, `list_apps`, `long_press`, `long_wait`, `open_app`, `open_in_browser`, `open_in_finder`, `screenshot`, `scroll`, `wait` | `ctx.tools`, `ctx.systemPrompt`, `ctx.attachments`, `ctx.sessionProjections` | `tool/call`, `tool/result`, `computer-use/coordinate-mode`, `image attachments` | - | The default plugin registers desktop observation and input tools. This catalog harvests their schemas with an inert desktop backend; no desktop action is executed. The optional code-agent plugin is a separate entry point. |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -50,6 +51,381 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`, `ctx.workflowEngine`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents the script children)` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`, `web_search` | `ctx.tools`, `ctx.web`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | web_search and web_fetch keep provider selection behind ctx.web so model-visible schemas stay stable across backend swaps. |
+
+<a id="deepseek-aidsh-tool-computer-use"></a>
+
+## `@deepseek-ai/dsh-tool-computer-use`
+
+### `click`
+
+Click at a 0–1000 position on the attached frontmost-window screenshot, then return the post-action screenshot. Use left (default) or right button; count 2 is a double-click. Optional modifiers (shift, cmd, option, control) are held only for this click.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "button": {
+      "type": "string",
+      "description": "Mouse button. Default: left.",
+      "default": "left",
+      "enum": [
+        "left",
+        "right"
+      ]
+    },
+    "count": {
+      "type": "integer",
+      "description": "1 for a single click, 2 for a double-click. Default: 1.",
+      "default": 1,
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "modifiers": {
+      "type": "array",
+      "description": "Modifier keys held only for this click, for example [\"shift\"] or [\"cmd\"]. Omit for a plain click.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "screen_index",
+    "position"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `drag`
+
+Drag from a start 0–1000 position to an end 0–1000 position on the attached frontmost-window screenshot, then return the post-action screenshot.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "start_screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "start_position": {
+      "type": "array",
+      "description": "[x, y] start as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "end_screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "end_position": {
+      "type": "array",
+      "description": "[x, y] end as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    }
+  },
+  "required": [
+    "start_screen_index",
+    "start_position",
+    "end_screen_index",
+    "end_position"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `hotkey`
+
+Press a key combination on the desktop, then return the post-action screenshot. System screenshot shortcuts (Cmd/Win+Shift+3/4/5) are rejected.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "keys": {
+      "type": "array",
+      "description": "Key names in order, for example [\"cmd\", \"c\"].",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "keys"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `input_text`
+
+Click to focus a 0–1000 position on the attached frontmost-window screenshot, type text, optionally replace existing content and press Enter, then return the post-action screenshot.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels; the click focuses the field.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "text": {
+      "type": "string",
+      "description": "Characters to type after the focus click."
+    },
+    "replace": {
+      "type": "boolean",
+      "description": "When true, select all in the focused field before typing. Default: false.",
+      "default": false
+    },
+    "submit": {
+      "type": "boolean",
+      "description": "When true, press Enter after typing. Default: false.",
+      "default": false
+    }
+  },
+  "required": [
+    "screen_index",
+    "position",
+    "text"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `list_apps`
+
+List running regular (Dock-visible) applications by display name, then return the current frontmost-window screenshot. Use this when the attached window is the wrong app.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `long_press`
+
+Press and hold the left button at a 0–1000 position on the attached frontmost-window screenshot, then return the post-action screenshot. duration_seconds defaults to 3 and must be 1–10.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "Hold duration in seconds. Default: 3. Must be 1–10.",
+      "default": 3
+    }
+  },
+  "required": [
+    "screen_index",
+    "position"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `long_wait`
+
+Pause 10, 30, 60, or 120 seconds, then return a fresh frontmost-window screenshot without moving the pointer. Only for a visible long job such as a download, installer, export, or on-screen generation. Pick the smallest wait_seconds that covers remaining progress; 120 only when the screenshot already shows a minutes-long job. Ordinary loading uses wait. Do not use for code_agent.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "wait_seconds": {
+      "type": "integer",
+      "description": "Seconds to pause. Must be 10, 30, 60, or 120.",
+      "enum": [
+        10,
+        30,
+        60,
+        120
+      ]
+    }
+  },
+  "required": [
+    "wait_seconds"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `open_app`
+
+Activate a running application or launch it by display name or bundle id, then return the post-action screenshot. Use this when the attached window is the wrong app. Do not click the Dock.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Localized application name or bundle identifier, for example Pages or com.apple.TextEdit."
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `open_in_browser`
+
+Open the default browser, or a full http(s) URL in it, then return the post-action screenshot. This is the user-visible browser. Do not use web_fetch as a substitute. Chinese in path or query must be plain text, never CJK percent-encoding such as %E5... / %E8....
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string",
+      "description": "http(s) URL to open. Omit to launch the default browser with no page."
+    }
+  }
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `open_in_finder`
+
+Open a folder in Finder, open a file with its default app, or reveal a file in Finder, then return the post-action screenshot. Omit path to open the Desktop. Use reveal_only only to select a file in Finder (Open With or rename/move). Pass a real path; do not OCR one from the screenshot.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute or ~ path. Omit to open the user Desktop."
+    },
+    "reveal_only": {
+      "type": "boolean",
+      "description": "When true and path is a file, reveal it in Finder instead of opening it. Default: false.",
+      "default": false
+    }
+  }
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `screenshot`
+
+Save the current frontmost-window screenshot to the user Desktop and copy it to the clipboard. Returns the saved file path. After bash, search, or web_fetch, call this to refresh the frontmost window. After click, type, wait, or open, do not call it again — those results already attach a window. Use when the user asked for a screenshot file or needs the image on the clipboard to paste.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `scroll`
+
+Scroll up or down at a 0–1000 position on the attached frontmost-window screenshot, then return the post-action screenshot. scroll_level is 1–10.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "direction": {
+      "type": "string",
+      "description": "Scroll direction.",
+      "enum": [
+        "up",
+        "down"
+      ]
+    },
+    "scroll_level": {
+      "type": "integer",
+      "description": "Scroll magnitude from 1 (smallest) to 10 (largest)."
+    }
+  },
+  "required": [
+    "screen_index",
+    "position",
+    "direction",
+    "scroll_level"
+  ]
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `wait`
+
+Pause 1 second, then return a fresh frontmost-window screenshot without moving the pointer. Use for page refresh, a loader, or a control that has not appeared yet. Do not use for code_agent.
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+The default plugin registers desktop observation and input tools. This catalog harvests their schemas with an inert desktop backend; no desktop action is executed. The optional code-agent plugin is a separate entry point.
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

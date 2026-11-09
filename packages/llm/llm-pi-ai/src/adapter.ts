@@ -62,6 +62,8 @@ import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { requestImageTarget, toPiContext } from './context.ts'
 import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
 import { toStreamChunks } from './stream.ts'
+import { createHash } from 'node:crypto'
+import { projectReplayIdentity } from './replay.ts'
 import type { PiAiRequestHeaderContext } from './types.ts'
 
 /**
@@ -416,7 +418,7 @@ export class PiAiAdapter extends LlmAdapter {
       && tools.every(tool => tool.deferLoading === true)
       && options.messages.some(message => message.role === 'developer'
         && message.content.some(block => block.type === 'tool-addition' || block.type === 'tool-removal'))
-    const request = needsPlaceholder
+    let request = needsPlaceholder
       ? { ...options, tools: [ANTHROPIC_TOOL_UPDATE_PLACEHOLDER, ...tools] }
       : options
     const reasoning = resolveReasoningLevel(
@@ -424,6 +426,10 @@ export class PiAiAdapter extends LlmAdapter {
       options.reasoningEffort ?? profile.reasoning,
     )
     const apiKey = await this.config.resolveApiKey(options.provider, profile)
+    const replayIdentity = apiKey === undefined ? undefined : createHash('sha256')
+      .update(JSON.stringify([model.api, model.baseUrl, options.provider, model.id, apiKey, profile.headers]))
+      .digest('hex')
+    request = projectReplayIdentity(request, replayIdentity)
 
     const consumer = new AbortController()
     const upstream = options.signal === undefined
@@ -465,7 +471,7 @@ export class PiAiAdapter extends LlmAdapter {
         signal: watchdog.signal,
         headers: requestHeaders(profile.headers, options, model.baseUrl, this.config.prepareHeaders),
       })
-      const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
+      const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id, replayIdentity)[Symbol.asyncIterator]()
       let exhausted = false
       try {
         while (true) {

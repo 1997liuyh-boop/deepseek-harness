@@ -27,6 +27,8 @@ Desktop analytics follows the [product collection policy](../../client/product-a
 <a id="use-this-package"></a>
 ## Use this package
 
+The model-selection projection retains explicit selection intent separately from the last used failover route (state version 3 rebuilds from unchanged log events). History-library changes clear lists, subscriptions and pending navigation. Session menus can explicitly fork readable history without private replay or empty reasoning, preserving the original and parent relationship.
+
 Prompt retries use the request identity in the first committed inbox insertion, including after the message is claimed or removed. Admission checks again after asynchronous attachment preparation, so concurrent retries accept one input. Acceptance acknowledges insertion, not execution or completion.
 
 The controller reads a Session's recorded preset through the optional `agentPresets.presetForSession(session)` service method. A null result means no preset was recorded; an absent service means preset identity is unavailable to the controller.
@@ -82,6 +84,8 @@ The controller composes `ArchivedSessionGate` through `ctx.plugin`: it loads onc
 
 <a id="client-references"></a>
 ## Client references
+
+The injected `sessions` service exposes the current document's `surface` and the Desktop shell protocol through `overlay`. Client feature plugins use these members without loading this package's runtime module; the controller owns query and Session-message parsing.
 
 `sessions.retain(target, { source, signal? })` immediately acquires one exact Client generation and starts its shared initial history opening. The target is a known Session id or a durable direct-parent subagent address; the Host validates an explicit address when history opens. The returned reference supports idempotent `release()` and `Symbol.dispose`; its `ready` Promise follows the shared `Session.open()` result and resolves to the exact binding when that attempt settles, including when a Remote failure is represented by `openState: 'error'`. It rejects when `Session.open()` rejects, its waiter is cancelled, or the reference is released early. Cancelling one waiter does not cancel another owner's opening. `sessions.using(target, options, operation)` waits for that settlement, holds its reference until the callback settles, and propagates rejected readiness and callback failures.
 

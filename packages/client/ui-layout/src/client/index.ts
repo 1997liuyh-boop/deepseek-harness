@@ -1,17 +1,18 @@
-/**
- * Layout plugin, browser half: one register() call contributes AppFrame into
- * the runtime's built-in 'root' slot and, in the same breath, declares the
- * child slots (declaration = exclusive render authority), seats the
- * layout store (panel geometry), and wires the panel-action service face.
- * ctx.layout selects the main panel and controls column geometry; Session
- * selection belongs to the Session Controller. A second effect seats the theme
- * presenter, which projects ctx.theme snapshots onto document.body.
- */
+
+
+
+
+
+
+
+
+
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import type {} from '@deepseek-ai/dsh-client-ui-theme/client'
+import type { ThemeSnapshot } from '@deepseek-ai/dsh-client-ui-theme/client'
 import type { HostObservable, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PanelInfo } from './service.ts'
 import { AppFrame } from './AppFrame.tsx'
@@ -22,32 +23,33 @@ import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client
 import { en, ja, es, fr, de, ru, pt, zh } from './shortcut-locales.ts'
 import { ThemePresenter } from './theme-presenter.ts'
 
-// Contract exports only (export-convergence rule: cross-package consumers
-// keep a symbol exported; test-only/package-internal symbols live off /src).
-// ILayout: the ctx.layout face consumers and test fakes type against.
-// OwnerShare contracts below are the render-side halves registrants compose
-// against; the frame components and the store factory are package-internal.
+
+
+
+
+
 export { LayoutController } from './service.ts'
 export type { ILayout, MainPanelId, PanelInfo } from './service.ts'
+
 
 /** Selector hook over root-scoped panel selection. */
 export type UsePanelInfo = SnapshotSelectorHook<PanelInfo>
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** The outward face only; the concrete service stays inside this plugin. */
+
     layout: import('./service.ts').ILayout
   }
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Layout keyboard command labels. */
+
     'shortcuts.layout': keyof typeof zh
   }
 
   interface GlobalStandardProps {
-    /** Subscribe to the selected main panel independently of parent renders. */
+
     usePanelInfo: UsePanelInfo
   }
 
@@ -68,41 +70,60 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * a compact control rail while collapsed.
      */
     'sidebar': { kind: 'single'; scope: 'root'; owner: SidebarOwnerProps }
+
+
+
+
     /**
-     * Central panel selected by sidebar entry id. The reserved `conversation`
-     * key hosts the Conversation; other keys receive no Session binding.
+     * 以侧栏入口 id 注册中央面板；保留键 conversation 承载对话。
+     * 其余键不接收会话绑定，当前键没有注册项时中央面板为空。
      */
     'main': { kind: 'keyed'; scope: 'root' }
+
+
+
+
+
+
+
+
+
+
+
+
+
     /**
-     * The right column: a track the centre makes room for, or nothing. OCCUPIED
-     * by the right Sidebar, which uses the resolved column width in normal
-     * mode and covers the viewport in fullscreen, retaining the wide-screen
-     * column reservation underneath.
-     *
-     * Whether the panel is shown, and whether it takes a track, is the
-     * occupant's own recorded business — it reports the composition of its
-     * expanded and presentation state through `ctx.layout`, and the frame sizes
-     * the track and places the resize handle from that. The expand control is
-     * not this column's: it is a button in the conversation header. The root
-     * occupant decides when to render its Session-bound content.
+     * 注册右侧栏会替换现有右侧栏；未注册时不显示内容。
+     * 组件接收解析后的列宽、视口宽度及可展开状态，自行报告展示状态，
+     * 框架据此保留列宽并放置拖动柄；组件自行决定何时显示会话内容。
      */
     'rightbar': { kind: 'single'; scope: 'root'; owner: RightbarOwnerProps }
+
+
+
+
+
+
     /**
-     * Full-width bottom content below all three columns. Its rendered height
-     * reduces the columns' available height; empty content reserves no space.
-     * The occupant owns its height, visibility, and controls. It receives no
-     * Session binding and remains mounted across main-panel navigation.
+     * 注册横跨三列的底部内容；替换已有注册项，未注册时不占空间。
+     * 组件自行控制高度、可见性和操作，不接收会话绑定且跨面板导航保持挂载；
+     * 实际高度会扣除三列可用高度。
      */
     'shell.bottom': { kind: 'single'; scope: 'root' }
+
+
+
+
+
+
+
+
+
+
     /**
-     * Frame-wide floating layer, above every column and outside their scroll
-     * containers. Deliberately generic and unowned by any feature: a badge, a
-     * toast stack or a status pill all belong here, and entries order among
-     * themselves. The layer itself is click-through — entries opt back into
-     * pointer events — so an occupant never blocks the app underneath.
-     *
-     * This is the additive seat for a frame-wide surface of your own: a fresh
-     * `id` is added beside the shipped entries instead of replacing them.
+     * 用独立 id 和 order 添加跨列浮层，与现有条目共存。
+     * 浮层位于列滚动容器之外，未注册时为空；容器允许点击穿透，
+     * 组件需要交互时自行启用指针事件，避免阻挡下方应用。
      */
     'shell.overlay': { kind: 'list'; scope: 'root' }
     /**
@@ -122,10 +143,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-// OwnerShare contracts — the render-side share the slot owner supplies at
-// renderSlot. Registrants IMPORT these and compose their full component props
-// from the framework-derived shares. Conversation business state and actions arrive through
-// framework-standard hooks and each registrant's inject face, not owner props.
+
+
+
+
+
 
 /** Sidebar owner share: live column state from the frame's concession solve. */
 export interface SidebarOwnerProps {
@@ -137,29 +159,31 @@ export interface SidebarOwnerProps {
   drawer: boolean
 }
 
+
 /** Right column owner share: resolved normal geometry and opening eligibility. */
 export interface RightbarOwnerProps {
-  /** Resolved normal panel width in px, not the saved preference; zero if it cannot fit. */
+
   width: number
-  /** Current frame width in px. */
+
   viewportWidth: number
-  /**
-   * Whether a normal right panel can retain 300px beside a 400px center.
-   * Before a narrow opening, includes the space from collapsing the left sidebar.
-   */
+
+
+
+
   canShow: boolean
 }
 
-/** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
-export const inject = ['slots', 'theme', 'locale', 'shortcuts']
 
-/**
- * Client plugin body: provide ctx.layout, then one register() call — AppFrame
- * into 'root' with its child-slot declarations, the layout store seat,
- * and the shared root instance supplying commands and the panel-info source.
- * @param ctx - client root context.
- */
+export const inject = ['slots', 'theme', 'locale', 'shortcuts', 'sessions']
+
+
+
+
+
+
+
 export function apply(ctx: ClientContext): void {
+  const overlay = ctx.sessions.surface === 'overlay'
   ctx.effect(() => ctx.locale.register('shortcuts.layout', { zh, en, ja, es, fr, de, ru, pt }), 'layout: command labels')
   const t = ctx.locale.bind('shortcuts.layout')
 
@@ -178,7 +202,7 @@ export function apply(ctx: ClientContext): void {
     const instance = handle.create()
     const store: typeof handle = { ...handle, create: () => instance }
     const retainMainPanels = (): void => {
-      instance.actions.retainMainPanels(ctx.slots.entries('main').flatMap(entry =>
+      instance.actions.retainMainPanels(ctx.slots.entriesOfSlot('main').flatMap(entry =>
         entry.options.key === undefined ? [] : [entry.options.key]))
     }
     const panelInfo: HostObservable<PanelInfo> = {
@@ -186,56 +210,71 @@ export function apply(ctx: ClientContext): void {
       subscribe: listener => instance.subscribe(listener),
     }
     const layout = new LayoutController(instance.actions, id =>
-      ctx.slots.entries('main').some(entry => entry.options.key === id), panelInfo)
+      ctx.slots.entriesOfSlot('main').some(entry => entry.options.key === id), panelInfo)
     const disposePanelInfo = ctx.slots.provideRoot({ hooks: { panelInfo: layout.panelInfo } })
     const disposeService = ctx.reflect.provide('layout', layout)
-    const disposeRegistration = ctx.slots.register({
-      name: 'root',
-      locale: 'common',
-      children: {
-        'sidebar': { kind: 'single', scope: 'root' },
-        'main': { kind: 'keyed', scope: 'root' },
-        'rightbar': { kind: 'single', scope: 'root' },
-        'shell.bottom': { kind: 'single', scope: 'root' },
-        'shell.overlay': { kind: 'list', scope: 'root' },
-        'shell.leading': { kind: 'single', scope: 'root' },
-      },
-      store,
-      inject: (): AppFrameInjected => ({ hooks: { foldedLandscape } }),
-    }, AppFrame)
-    const disposeShortcut = ctx.shortcuts.register({
-      id: 'sidebar.left.toggle' as ShortcutCommandId, label: () => t('toggle'), aliases: ['sidebar', 'toggle left sidebar'],
-      defaults: {
-        'desktop:macos': { code: 'KeyB', modifiers: ['primary'] },
-        'desktop:windows': { code: 'KeyB', modifiers: ['primary'] },
-        'desktop:linux': { code: 'KeyB', modifiers: ['primary'] },
-        'web:macos': { code: 'KeyB', modifiers: ['primary', 'alt'] },
-        'web:windows': { code: 'KeyB', modifiers: ['primary', 'alt'] },
-      },
-      regions: ['page', 'editable'], modals: ['sidebar'],
-      resolve: ({ modal }) => modal !== null && modal !== 'sidebar'
-        ? { status: 'pass' }
-        : { status: 'handled', run: () => { layout.toggleSidebar() } },
-    })
-    const disposePanels = ctx.slots.subscribe('main', retainMainPanels)
-    retainMainPanels()
+    let disposeRegistration = (): void => {}
+    let disposeShortcut = (): void => {}
+    let disposePanels = (): void => {}
+    if (!overlay) {
+      disposeRegistration = ctx.slots.register({
+        name: 'root',
+        locale: 'common',
+        children: {
+          'sidebar': { kind: 'single', scope: 'root' },
+          'main': { kind: 'keyed', scope: 'root' },
+          'rightbar': { kind: 'single', scope: 'root' },
+          'shell.bottom': { kind: 'single', scope: 'root' },
+          'shell.overlay': { kind: 'list', scope: 'root' },
+          'shell.leading': { kind: 'single', scope: 'root' },
+        },
+        store,
+        inject: (): AppFrameInjected => ({ hooks: { foldedLandscape } }),
+      }, AppFrame)
+      disposeShortcut = ctx.shortcuts.register({
+        id: 'sidebar.left.toggle' as ShortcutCommandId, label: () => t('toggle'), aliases: ['sidebar', 'toggle left sidebar'],
+        defaults: {
+          'desktop:macos': { code: 'KeyB', modifiers: ['primary'] },
+          'desktop:windows': { code: 'KeyB', modifiers: ['primary'] },
+          'desktop:linux': { code: 'KeyB', modifiers: ['primary'] },
+          'web:macos': { code: 'KeyB', modifiers: ['primary', 'alt'] },
+          'web:windows': { code: 'KeyB', modifiers: ['primary', 'alt'] },
+        },
+        regions: ['page', 'editable'], modals: ['sidebar'],
+        resolve: ({ modal }) => modal !== null && modal !== 'sidebar'
+          ? { status: 'pass' }
+          : { status: 'handled', run: () => { layout.toggleSidebar() } },
+      })
+      disposePanels = ctx.slots.subscribe('main', retainMainPanels)
+      retainMainPanels()
+    }
     return () => {
       disposeShortcut()
       layout.dispose()
       disposePanels()
       disposeRegistration()
       disposePanelInfo()
-      // provide()'s disposer settles asynchronously; teardown is synchronous fire-and-forget.
+
       void disposeService()
     }
   }, 'ui-layout: service + root registration')
 
-  // Theme presentation: pure DOM writes from resolved snapshots — initial
-  // state through the getter once, then event-driven only; no React path.
+
+
+
   ctx.effect(() => {
     const presenter = new ThemePresenter()
-    presenter.apply(ctx.theme.getTheme())
-    const off = ctx.on('theme/change', (snapshot) => { presenter.apply(snapshot) })
+    const applySnapshot = (snapshot: ThemeSnapshot): void => {
+      presenter.apply(snapshot)
+      if (overlay) {
+        window.parent.postMessage(
+          { type: ctx.sessions.overlay.themeMessageType, colorScheme: snapshot.active.colorScheme },
+          ctx.sessions.overlay.shellOrigin,
+        )
+      }
+    }
+    applySnapshot(ctx.theme.getTheme())
+    const off = ctx.on('theme/change', applySnapshot)
     return () => {
       off()
       presenter.dispose()

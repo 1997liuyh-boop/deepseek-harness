@@ -14,6 +14,7 @@ import LlmRuntime, {
   resolveRetryPolicy,
   StreamChunk,
   createMessage,
+  createAssistantMessage,
   createDeveloperMessage,
   createUserMessage,
 } from '@deepseek-ai/dsh-llm'
@@ -1505,7 +1506,7 @@ describe('LlmRuntime', () => {
     expect(assistant.source.replayState).toEqual({ private: 'state' })
   })
 
-  it('keeps replay state when historical and target providers belong to the same adapter instance', async () => {
+  it('strips native replay when routes differ even on the same adapter instance', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const adapter = new RecordingAdapter(SCRIPT)
@@ -1526,8 +1527,24 @@ describe('LlmRuntime', () => {
     })) { /* drain */ }
 
     expect(adapter.lastOptions?.messages[0]?.source).toEqual({
-      kind: 'model', provider: 'historical', model: 'old-model', replayState,
+      kind: 'model', provider: 'historical', model: 'old-model',
     })
+  })
+
+  it('refuses opaque reasoning before stripping cross-provider replay', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const target = new RecordingAdapter(SCRIPT)
+    ctx.llm.registerAdapter(['historical', 'target'], target)
+    const original = createAssistantMessage({ content: [{ type: 'reasoning', text: '' }], source: {
+      provider: 'historical', model: 'old-model', replayState: { blocks: [{ redacted: true }] },
+    } })
+    const chunks = []
+    for await (const chunk of ctx.llm.stream({ provider: 'target', model: 'new-model', messages: [original] })) chunks.push(chunk)
+    expect(chunks.at(-1)).toMatchObject({ type: 'finish', reason: { kind: 'error', failure: { code: 'REPLAY_INCOMPATIBLE' } } })
+    expect(target.lastOptions).toBeUndefined()
+    expect(original.source.replayState).toEqual({ blocks: [{ redacted: true }] })
+    await ctx.fiber.dispose()
   })
 
   it('strips replay state but preserves provider and model when the target uses a different adapter instance', async () => {

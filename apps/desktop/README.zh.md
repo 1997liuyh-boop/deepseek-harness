@@ -13,6 +13,7 @@ Desktop 在原生应用中运行 Harness 工作区。本参考文档说明应用
 ## 目录
 
 - [应用概览](#application-overview)
+- [划词工具栏](#selection-toolbar)
 - [终端命令](#terminal-command)
 - [关闭窗口与退出](#closing-the-window-and-quitting)
 - [关键技术决策](#key-technical-decisions)
@@ -51,9 +52,31 @@ Desktop Host 的 Platform API 请求与更新策略请求用相同的 Platform �
 
 账号凭据被服务端判定失效后，未配置官方 API key 时返回 Welcome；有可用 API key 时保持工作区打开。主动退出登录遵循相同规则。Welcome 和工作区均显示本地化的登录失效提示。
 
+被访问防护拦截的平台账号请求改用 Chromium 网络栈，独立持久 Session 按配置的 HTTPS 来源隔离。浏览器 Cookie 保留在 Electron 中；私有进程 IPC 仅传递经过校验的固定路径请求和有界响应。明确的验证响应会打开无 preload 的官方沙箱验证页；GET 请求遇到人工验证码时，使用原请求头打开该固定接口。禁止跨来源导航、子窗口和设备权限。验证在原请求期限内至多重试一次。取消、关闭窗口或退出应用会结束等待；并发请求共用窗口，取消一个调用不影响其他调用。验证失败保留账号授权和已有历史。
+
 桌面麦克风访问仅允许主 `dsh-app://app` 页面发起的音频请求。macOS 使用系统麦克风授权、随包用途说明，以及主应用与 Helper 签名中的 `com.apple.security.device.audio-input` 权限。
 
 按 F12（多媒体功能键键盘上为 Fn+F12）、macOS 的 Command+Option+I 或 Windows 的 Ctrl+Shift+I，可切换当前获得焦点的应用页面的 DevTools，打包版本同样支持。应用菜单在隐藏和退出命令之前的独立分组中显示本地化的“开发者工具”命令。Windows 在标题栏的应用弹出菜单中显示开关，通过隐藏的原生应用菜单注册快捷键；macOS 和 Linux 的应用菜单保留隐藏的 F12 快捷键别名。更新遮罩和打包版本的内嵌浏览器禁用 DevTools。
+
+悬浮聊天可在 AI 回复时收起。鼠标离开窗口后自动折叠；固定窗口、输入法组合输入、待回答问题和权限提示仍保留展开。悬停复用已加载的头像，不重复调整原生窗口。Windows 无需开启 macOS 的屏幕录制与辅助功能开关；macOS 可从“设置 → 悬浮球”打开对应授权页。
+
+<a id="selection-toolbar"></a>
+
+## 划词工具栏
+
+在其他应用中选择文字可打开圆角工具栏。六项操作为搜索、翻译、快速笔记、抓取公众号、解读和发给 AI。悬浮球菜单可以启用或关闭划词。普通聊天运行时仍可划词；Computer Use 输入期间暂时隐藏工具栏。
+
+翻译和解读在划词结束时的鼠标位置旁打开独立结果框，空间不足时翻转或限制在该显示器的可用区域内。新 profile 默认翻译为英文，之后记住目标语言，支持输入任意语言名称。每项任务使用当前 dsh 会话选定的模型；未选择会话时使用配置的默认模型。原文和要求记录在独立的标准会话中，主聊天和悬浮球不切换会话。新的翻译会话（包括重试）统一归入可复用的**翻译小分队**工作区；已有会话保留原归属，解读保持原有归属方式。分组失败时停止任务并显示错误，不创建会话。结果在流式输出及完成后均渲染 Markdown 标题、列表、加粗、表格和代码，复制保留 Markdown 原文。原始 HTML 显示为文本，危险链接协议被禁用。结果框支持重试和停止所属任务；关闭窗口也会取消该任务。模型失败时保留已有内容并显示可重试的错误。
+
+快速笔记将可编辑文字保存为 Markdown，默认目录为 `$DSH_HOME/profiles/desktop/selection-notes`。抓取公众号接受公开的 `mp.weixin.qq.com` 文章链接，预览正文，并将 Markdown 和可获取图片保存到 `$DSH_HOME/profiles/desktop/wechat-articles`。两项操作都支持原生文件夹选择器，并使用唯一文件名。视频保留原文入口；图片下载失败时保留链接并报告缺项。验证和登录跳转显示实际访问要求，不再误报链接无效；**打开原文**通过默认浏览器打开已校验的文章地址。抓取失败保留已有预览。
+
+链接抓取不共享电脑微信的登录或购买状态。请在**导入微信正文**中填写文章标题，并在上方保留原文链接。**读取图文剪贴板**读取您主动从微信复制的内容，保留支持的微信图片位置，保存时下载可获取图片。纯文本仍可通过**预览导入正文**导入。请核对已购部分和文章结尾；导入不会自动验证完整性或获取受保护媒体。编辑纯文本稿后须重新预览才能保存；取消文件或目录选择保留稿件。
+
+付费文章按公开页的订阅标记识别：结果窗显示试读比例与售价、保持保存禁用，并提供**导入已复制正文**，读取你在微信中复制的正文，再用公开页补齐标题、作者和日期。翻译与解读默认跟随主窗口当前会话的模型；可在结果窗的模型列表或悬浮球菜单的**划词工具栏模型**子菜单中固定模型，包括「设置 → 模型」里的第三方供应商。该选择保存在 `$DSH_HOME/profiles/desktop/selection-toolbar.json`。
+
+**导入打印 PDF**保留从微信导出的 PDF 原件，提取可搜索正文，并将每页渲染为保留打印布局的静态 PNG。PDF 上限为 40 MB、100 页，页面图片合计上限为 120 MB。打印图片可能低于原图质量，GIF 动画和视频不随打印保存。**补充图片／视频**添加用户选择的图片和视频原件，使用相对路径引用。支持 PNG、JPEG、GIF、WebP、MP4、MOV、M4V 和 WebM；选择时校验文件签名，不校验视频完整性。每次最多选择 50 个文件，单图上限 25 MB、单视频上限 1 GB，全部附件上限 2 GB。归档的 `media.json` 记录 SHA-256 与逐文件结果；变更过或不可读的文件报告为缺项。视频请通过原播放器导出，并在保存后核对完整播放。应用不检查无关微信缓存或解密媒体。
+
+Windows 优先读取无障碍选区。结果框的**微信兼容取词**开关仅允许在已识别的微信窗口内拖选或双击后、无障碍取词不可用时使用 Ctrl+C。兼容取词会复制选中文字并将其保留在剪贴板中；取词功能不会写回旧剪贴板内容。仅收到来自原进程的非空文字，且手势、前台窗口、剪贴板所有者及序号仍有效时才接受为选区。图片、文件、未知格式和无关剪贴板变更不会被识别为选区。部分微信版本或受保护页面仍可能阻止取词，此时可将复制的文章链接粘贴到归档窗口。
 
 <a id="terminal-command"></a>
 
@@ -185,6 +208,8 @@ macOS 和 Linux 从图形界面启动的程序只继承会话管理器提供的�
 
 ## 开发
 
+Desktop Host 直接依赖 `dsh-base` 和 `dsh-web-app`，确保 profile 未安装本地副本时仍能从宿主安装目录解析这两个插件包。
+
 开发环境应用菜单提供“刷新页面”（macOS 为 Cmd+R，其他平台为 Ctrl+R）和“重启应用与 Host”。重启会等待 Host 关闭，再重新启动 Electron 和新的 Host；这两项操作都不会重新构建源码。
 
 `dev:desktop` 会构建当前 Host、客户端 bundle、Web 前端和 Electron 壳，把已构建的 CLI 包、私有 Desktop Host 包及其 workspace 依赖投影为一次性桌面 npm 项目，然后直接启动 Electron；这条路径不从 npm 解析 dsh：
@@ -208,6 +233,18 @@ Web 侧的对应命令是 `pnpm run dev:web` 与 `pnpm run start:web`，见[开�
 [原生输入与渲染进程键盘测试](tests/keyboard.spec.ts)直接纳入仓库 Client 类型检查。它只导入不依赖 Cordis 的 Desktop 输入、持久化、IPC、浏览器 guest 和蒙层模块。
 
 安装工作区依赖不会自动运行锁定版本 Electron 提供的独立二进制安装程序。直接运行 [Windows 控制台信号测试](tests/windows-cli-signals.spec.ts)前，在仓库根目录执行 `pnpm --filter @deepseek-ai/dsh-desktop exec install-electron`，准备锁定版本的 Electron 二进制。通过代理下载时，为该安装进程启用 `ELECTRON_GET_USE_PROXY=1`。Windows 覆盖率检查要求安装成功后，才启动带覆盖率插桩的单元测试集。
+
+<a id="studio-development"></a>
+
+### 工作室开发
+
+工作库需要独立检出。按其 README 准备依赖后，在已有构建产物的 Harness 根目录运行：
+
+```sh
+pnpm run dev:desktop:studio --library <library-directory> --skip-build
+```
+
+`--skip-build` 只跳过 Harness 构建；启动器仍会构建工作库，并将其索引中列出的插件安装到开发 profile。Windows 上的 Toonflow 和 Printfilm 服务还需要仓库同级已准备的 `studio-apps`、`studio-runtime` 与 `studio-data` 目录。`--library` 选择工作库检出目录，不迁移这些目录。`DSH_STUDIO_NODE` 可覆盖 Windows 启动脚本使用的专用 Node 可执行文件。
 
 ### 启动引导
 
@@ -318,7 +355,7 @@ UI 切换期间，选择器显示待应用选项和加载指示；失败时恢�
 
 ### 强制更新策略
 
-打包读取 `.env.windows` 或 `.env.macos`：`DSH_DESKTOP_AUTO_UPDATE_ENV=test`（默认值）选择 `DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN`；`production` 选择 `DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN`。模板将两个源站留空；在 Git 忽略的目标 dotenv 文件中填写所选部署的源站。本地 macOS 未签名构建省略此策略，不读取这两个文件。其他模式在准备产物或签名前必须配置所选源站，包括 Windows 未签名和仅准备构建；未选环境的源站可不填。这些配置不会回退到父进程环境或另一部署环境。打包将选定策略与应用 ID 写入元数据；打包应用忽略运行时覆盖。
+打包读取 `.env.windows` 或 `.env.macos`：`DSH_DESKTOP_AUTO_UPDATE_ENV=test`（默认值）选择 `DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN`；`production` 选择 `DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN`。模板将两个源站留空；在 Git 忽略的目标 dotenv 文件中填写所选部署的源站。本地 macOS 未签名构建与显式 Windows `--unsigned --local` 构建省略此策略，不读取这两个文件。其他模式在准备产物或签名前必须配置所选源站，包括普通 Windows 未签名和仅准备构建；未选环境的源站可不填。这些配置不会回退到父进程环境或另一部署环境。打包将选定策略与应用 ID 写入元数据；打包应用忽略运行时覆盖。
 
 `DSH_DESKTOP_MANDATORY_UPDATE_CONFIG` JSON 提供测试登录源站，以及可选的轮询和下载页面选项；打包拒绝其中的 `origin` 和 `authentication`。页面白名单默认只包含所选服务源站；需要其他已批准下载页面源站时应显式配置。测试包选择 `feishu-test`，且必须在 `DSH_DESKTOP_MANDATORY_UPDATE_CONFIG` 中配置 `allowedAuthOrigins`；正式包选择 `anonymous`，并拒绝该字段。每个登录源站必须是没有凭据、路径、查询或片段的 HTTPS origin。登录窗口仅允许文档导航到所选策略源站和这些已配置源站。策略请求拒绝重定向；仅测试鉴权携带网关 Cookie。未打包开发模式则从此变量读取完整策略 JSON，并要求 `DSH_DESKTOP_APP_ID`；缺少 JSON 会禁用开发模式策略查询，仅匿名开发允许 HTTP `127.0.0.1`。用户发起常规检查时会并发触发策略检查，但不会等待或展示策略失败。只有已确认的强更决定可以关闭常规弹窗。测试环境鉴权会等待当前常规弹窗结束，取消或失败不会丢弃 updater 结果。
 
@@ -374,6 +411,12 @@ node apps/desktop/node_modules/pnpm/bin/pnpm.mjs --dir apps/desktop run test:upd
 <a id="known-limitations"></a>
 
 ## 已知限制
+
+悬浮球右键菜单提供**截图 / 屏幕录制**。在桌面上拖动框选任意区域，选区可移动和调整大小；截图工具栏提供矩形、箭头、文字、撤销、重选、复制和保存。复制将带标注的截图写入剪贴板，保存打开系统另存为窗口。录屏仅采集单个屏幕内的选区，开始后显示可拖动的置顶控制栏，提供计时、暂停/继续、停止保存和放弃操作。取消另存为或写入失败后可重新选择位置，采集内容保留至主动放弃或关闭采集窗口。录屏上限为开始后的 15 分钟和 500 MB，Windows 可选择系统声音，不会自动发送给模型。
+
+公众号归档结果中也可打开采集窗口，导入正文后补充可阅读的图片或视频录制件。图文剪贴板导入保留可下载图片，PDF 导入保留原件与逐页静态图。公开页面抓取不使用微信登录态，付费文章可能只返回试读。录屏保留可见播放过程，非原始媒体，受保护视频可能黑屏；预览和归档标明来源并提示核对完整性。
+
+工作室开发启动器为已安装的用量插件应用带版本检查的[余额兼容修正](../../scripts/patch-usage-balance.mjs)。DeepSeek 余额查询跟随官方模型的凭据引用，不使用网页登录授权或同名第三方供应商的密钥。HTTP 401 会提示到**设置 → 模型 → DeepSeek**更新开放平台 API Key。内置的 **DeepSeek 账号**使用网页登录授权，内置的 **DeepSeek** 使用 API Key。
 
 - 账号登录尚未接入；登录按钮禁用。Windows 材质效果仍需平台验证。
 

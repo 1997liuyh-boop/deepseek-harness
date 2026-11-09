@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-06-selection-toolbar-paid-articles-and-model-choice.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-06-selection-toolbar-paid-articles-and-model-choice.md
+/agent-note-selection-toolbar-paid-article-handling-and-fixed-model-choice:
+  en: 928bd551e8b6937c
+  zh: 542e966b80eebb13
+/agent-note-selection-toolbar-paid-article-handling-and-fixed-model-choice/problem:
+  en: ab675ac34e59dc34
+  zh: bd2200527e417b28
+/agent-note-selection-toolbar-paid-article-handling-and-fixed-model-choice/decision:
+  en: 96eeb86e3c4e1de1
+  zh: 6085c2559273414c
+/agent-note-selection-toolbar-paid-article-handling-and-fixed-model-choice/alternatives-considered:
+  en: 1e12e5aa0650fd27
+  zh: 32fc92cc89aa7ba1
+/agent-note-selection-toolbar-paid-article-handling-and-fixed-model-choice/consequences:
+  en: eec95efc06aadd4d
+  zh: ca8207fc571381f1
+/agent-note-selection-toolbar-paid-article-handling-and-fixed-model-choice/testing:
+  en: 6269a992e6c79685
+  zh: ea0edc3cab217ca2

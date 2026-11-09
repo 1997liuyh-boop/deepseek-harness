@@ -844,6 +844,41 @@ interface SessionLogUploadRequest {
 type SessionLogUploadExclusion = (request: SessionLogUploadRequest) => boolean
 ```
 
+## 本机账号历史库
+
+[`session-library`](../../packages/session/session-library/README.zh.md) 向会话 API 和模型设置提供账号历史库状态、可恢复的归属备份和未绑定的迁入候选会话。这些值不含账号凭据，也不替代 Session 日志。
+
+源代码：[`packages/session/session-library/src/types.ts`](../../packages/session/session-library/src/types.ts)
+
+```ts type-equiv
+/** 可恢复的归属迁入记录。 */
+interface LibraryBackup {
+  id: string
+  createdAt: number
+  count: number
+  restored: boolean
+}
+```
+
+```ts type-equiv
+/** 当前账号与本机历史入口的状态。 */
+interface LibraryState {
+  mode: 'local' | 'account'
+  accountAvailable: boolean
+  library: 'local' | 'custom' | null
+  backups: LibraryBackup[]
+}
+```
+
+```ts type-equiv
+/** 用户可以明确选择迁入的未绑定会话。 */
+interface LibraryCandidate {
+  sessionId: SessionId
+  createdAt: number
+  cwd: string
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -909,6 +944,52 @@ resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>
  * @returns provider-grouped models, the deployment default, and isolated provider failures.
  */
 @Remote('modelCatalog') modelCatalog(): Promise<ModelCatalog>
+
+/**
+ * 读取当前部署的模型路由策略。
+ * @returns 路由插件声明的策略；未加载插件时返回 null。
+ */
+@Remote routingPolicy(): RoutingPolicy | null
+
+/**
+ * 通过路由插件保存完整模型路由策略；插件缺失时拒绝请求。
+ * @param policy - 直连或聚合模式的完整策略。
+ * @returns 校验并保存后的路由策略。
+ */
+@Remote saveRoutingPolicy(policy: RoutingPolicy): Promise<RoutingPolicy>
+
+/**
+ * 读取当前机器上的会话历史归属状态。
+ * @returns 历史库插件的当前状态；未加载插件时返回 null。
+ */
+@Remote libraryState(): LibraryState | null
+
+/**
+ * 切换当前可见的本机会话历史库；操作失败时返回结构化错误。
+ * @param mode - 未绑定本机历史或当前账号历史。
+ * @returns 切换完成后的历史库状态。
+ */
+@Remote setLibraryMode(mode: 'local' | 'account'): Promise<LibraryState>
+
+/**
+ * 列出可以迁入当前账号库的未绑定本机会话。
+ * @returns 可供用户明确选择的完整会话组候选项。
+ */
+@Remote libraryCandidates(): Promise<LibraryCandidate[]>
+
+/**
+ * 备份并迁入明确选定的完整会话组；失败时返回结构化错误。
+ * @param sessionIds - 用户选择的完整父子会话组。
+ * @returns 迁入操作生成并校验的备份身份。
+ */
+@Remote migrateLibrary(sessionIds: SessionId[]): Promise<string>
+
+/**
+ * 根据当前账号的备份恢复会话归属，保留迁入后新增内容。
+ * @param backupId - 属于当前账号的迁入备份身份。
+ * @returns 恢复归属后的历史库状态。
+ */
+@Remote restoreLibrary(backupId: string): Promise<LibraryState>
 
 /**
  * Report whether this deployment can hand a Session workspace path to a native desktop.
@@ -1058,9 +1139,54 @@ workspaceDesktop(): { name: string; available: boolean; fileManager: 'finder' | 
 @Remote({ mode: 'stream' }) async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame>
 ```
 
-Types: [SessionId](core.zh.md) · [SessionSearchRequest](session-query.zh.md)
+Types: [RoutingPolicy](llm-streaming.zh.md) · [SessionId](core.zh.md) · [SessionSearchRequest](session-query.zh.md)
 
 Source: [`packages/api/session-controller/src/index.ts`](../../packages/api/session-controller/src/index.ts)
+
+<a id="ctxsessionlibrary--sessionlibrary"></a>
+
+### `ctx.sessionLibrary` — `SessionLibrary`
+
+账号历史提供者；所有入口使用 SessionStore 的统一策略。
+
+```ts cordis-catalog
+/**
+ * 读取当前逻辑库的可见状态。
+ * @returns 当前逻辑库、账号可用性与本账号的备份。
+ */
+describe(): LibraryState
+
+/**
+ * 停止运行任务后切换历史入口。
+ * @param mode - 用户明确选择的本机或账号入口。
+ * @returns 提交后的状态。
+ */
+setMode(mode: 'local' | 'account'): Promise<LibraryState>
+
+/**
+ * 列出可由用户明确迁入的会话。
+ * @returns 未归属账号的会话，不自动迁入。
+ */
+async candidates(): Promise<LibraryCandidate[]>
+
+/**
+ * 导出正文和附件并校验后原子迁入；父子会话必须一并选择。
+ * @param ids - 用户选择的会话身份。
+ * @returns 迁入后可恢复的备份记录身份。
+ */
+migrate(ids: readonly SessionId[]): Promise<string>
+
+/**
+ * 只恢复归属，聊天、标题、附件及工作室绑定均保留当前版本。
+ * @param id - 本账号的备份身份。
+ * @returns 恢复后的状态。
+ */
+restore(id: string): Promise<LibraryState>
+```
+
+Types: [SessionId](core.zh.md)
+
+Source: [`packages/session/session-library/src/index.ts`](../../packages/session/session-library/src/index.ts)
 
 <a id="ctxsessionlogdeepseek--sessionlogdeepseekservice"></a>
 
@@ -1239,14 +1365,14 @@ Source: [`packages/core/session/src/index.ts`](../../packages/core/session/src/i
 
 #### `api-session/activity` — emit
 
-One user-authored durable message advanced Session list activity.
+用户编写的持久化消息推进了会话列表的活动时间。
 
 ```ts cordis-catalog
 /**
- * One user-authored durable message advanced Session list activity.
+ * 用户编写的持久化消息推进了会话列表的活动时间。
  * @mode emit
- * @param sessionId - addressed Session identity.
- * @param updatedAt - durable message time used for list ordering.
+ * @param sessionId - 活动时间发生变化的会话身份。
+ * @param updatedAt - 用于列表排序的持久化消息时间。
  */
 'api-session/activity'(sessionId: SessionId, updatedAt: number): void
 ```
@@ -1259,14 +1385,13 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/added` — emit
 
-A Session became visible or its Agent was created or disposed. Consumers upsert the summary and replace its current running and availability state.
+会话变为可见，或其 Agent 创建、释放后，发布当前列表摘要供消费者更新。
 
 ```ts cordis-catalog
 /**
- * A Session became visible or its Agent was created or disposed.
- * Consumers upsert the summary and replace its current running and availability state.
+ * 会话变为可见，或其 Agent 创建、释放后，发布当前列表摘要供消费者更新。
  * @mode emit
- * @param summary - current list row for the Session.
+ * @param summary - 会话当前的运行与可用状态摘要。
  */
 'api-session/added'(summary: SessionSummary): void
 ```
@@ -1277,14 +1402,14 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/error` — emit
 
-One Agent failed outside a durable turn position.
+一个 Agent 在没有持久化轮次位置的情况下报告失败。
 
 ```ts cordis-catalog
 /**
- * One Agent failed outside a durable turn position.
+ * 一个 Agent 在没有持久化轮次位置的情况下报告失败。
  * @mode emit
- * @param sessionId - Agent and Session identity.
- * @param message - user-safe failure chain.
+ * @param sessionId - Agent 所属的会话身份。
+ * @param message - 可向用户展示的失败原因链。
  */
 'api-session/error'(sessionId: SessionId, message: string): void
 ```
@@ -1297,13 +1422,13 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/removed` — emit
 
-A Session left the live Host registry.
+会话离开当前 Host 的活动注册表。
 
 ```ts cordis-catalog
 /**
- * A Session left the live Host registry.
+ * 会话离开当前 Host 的活动注册表。
  * @mode emit
- * @param sessionId - removed Session identity.
+ * @param sessionId - 被移除的会话身份。
  */
 'api-session/removed'(sessionId: SessionId): void
 ```
@@ -1316,14 +1441,14 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 
 #### `api-session/status` — emit
 
-One Agent changed running state.
+一个 Agent 的运行状态发生变化。
 
 ```ts cordis-catalog
 /**
- * One Agent changed running state.
+ * 一个 Agent 的运行状态发生变化。
  * @mode emit
- * @param sessionId - Agent and Session identity.
- * @param running - whether the Agent is running.
+ * @param sessionId - Agent 所属的会话身份。
+ * @param running - Agent 当前是否正在运行。
  */
 'api-session/status'(sessionId: SessionId, running: boolean): void
 ```
@@ -1335,6 +1460,19 @@ Source: [`packages/api/session-controller/src/types.ts`](../../packages/api/sess
 <a id="session-events"></a>
 
 ### `session/*` events
+
+<a id="sessionaccess-changed--emit"></a>
+
+#### `session/access-changed` — emit
+
+可见会话集合改变；订阅者必须丢弃旧账号缓存。 @mode emit
+
+```ts cordis-catalog
+/** 可见会话集合改变；订阅者必须丢弃旧账号缓存。 @mode emit */
+'session/access-changed'(): void
+```
+
+Source: [`packages/core/session/src/types.ts`](../../packages/core/session/src/types.ts)
 
 <a id="sessioncreated--emit"></a>
 

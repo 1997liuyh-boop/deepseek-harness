@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/llm/llm-routing/README.md
+/:
+  en: 60d51ab42fb00aca
+  zh: 81e235174e35babd
+/deepseek-ai-dsh-llm-routing:
+  en: e892ec6a67460d49
+  zh: 3cee38ad779c3ecd
+/deepseek-ai-dsh-llm-routing/summary:
+  en: 2573a50b3b252ebf
+  zh: 680e06a6127f0df5
+/deepseek-ai-dsh-llm-routing/table-of-contents:
+  en: 23386452a66b2fbd
+  zh: 4cf93c4bf17b3da2
+/deepseek-ai-dsh-llm-routing/use-this-package:
+  en: ddf4856efb23dcd6
+  zh: aa0ca5c849f6e74b
+/deepseek-ai-dsh-llm-routing/understand-the-implementation:
+  en: 5db487d35a84d424
+  zh: 47d1898066e69718
+/deepseek-ai-dsh-llm-routing/further-exploration:
+  en: fc2eaae0a8d30d2e
+  zh: e6ed27d06e05f464
+/deepseek-ai-dsh-llm-routing/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-llm-routing/model-experience/provider-failover:
+  en: 24f11f537f897b44
+  zh: c60bd6e27e0689d5
+/deepseek-ai-dsh-llm-routing/model-experience/provider-failover/what-the-model-sees:
+  en: 07643d953480ece4
+  zh: ab1d2a5e719a1a94
+/deepseek-ai-dsh-llm-routing/model-experience/provider-failover/token-effect:
+  en: 59c395373cfadd05
+  zh: cb1509a2b19115f8
+/deepseek-ai-dsh-llm-routing/model-experience/provider-failover/kv-cache-effect:
+  en: 5cac7a99a2b203c5
+  zh: 8d5933390dc1cae2
+/deepseek-ai-dsh-llm-routing/known-limitations-and-deferred-work:
+  en: 5ca01a57ba9db544
+  zh: 77c611383cf06499
+/deepseek-ai-dsh-llm-routing/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

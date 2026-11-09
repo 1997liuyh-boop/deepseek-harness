@@ -567,6 +567,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'ccSwitchImport',
+    summary: '扫描标识在内存中有时限，卸载后销毁；提交操作串行且等待释放。',
+    description: '扫描标识在内存中有时限，卸载后销毁；提交操作串行且等待释放。',
+    methods: [
+      {
+        signature: '@Remote scan(directory: string): Promise<ImportScan>',
+        description: '读取来源并返回脱敏候选，不发出供应商网络请求。',
+        parameters: [{ name: 'directory', description: '空串自动定位，其他值必须为绝对目录。' }],
+        returns: '有时限的扫描及当前可用协议。',
+      },
+      {
+        signature: '@Remote models( token: ImportScanToken, id: ImportCandidateId, baseURL: string, api: string, apiKey: string, signal: AbortSignal, ): Promise<string[]>',
+        description: '用户明确请求后，使用 Host 持有的来源凭据查询模型。',
+        parameters: [{ name: 'token', description: '有效扫描标识。' }, { name: 'id', description: '扫描中的候选。' }, { name: 'baseURL', description: '用户确认的接口地址。' }, { name: 'api', description: '用户确认的协议。' }, { name: 'apiKey', description: '用户显式填写的替代凭据，空串使用来源凭据。' }, { name: 'signal', description: '连接生命周期。' }],
+        returns: '供应商真实返回的模型标识。',
+      },
+      {
+        signature: '@Remote commit(token: ImportScanToken, selections: ImportSelection[]): Promise<ImportResult[]>',
+        description: '逐项新增供应商；空模型列表按查询时限自动读取，不修改默认模型，失败项保留可重试。',
+        parameters: [{ name: 'token', description: '有效扫描标识。' }, { name: 'selections', description: '用户勾选并确认的供应商数据。' }],
+        returns: '每项保存、已有或失败的结果；不含凭据。',
+      },
+    ],
+  },
+  {
     key: 'claudeCodeMods',
     summary: 'The bridge service: loaded mods, their hooks, and the harness listeners that raise their events.',
     description: 'The bridge service: loaded mods, their hooks, and the harness listeners that raise their events. Mods join through ClaudeCodeMods.add, which defineMod calls when a mod plugin mounts. The Remote methods let a Client draw each session\'s band above the prompt and press its buttons.',
@@ -2021,6 +2046,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'llmRouting',
+    summary: '在模型组装与失败恢复扩展点执行路由，不共享官方凭据。',
+    description: '在模型组装与失败恢复扩展点执行路由，不共享官方凭据。',
+    methods: [
+      {
+        signature: 'describe(): RoutingPolicy',
+        description: '读取当前路由配置。',
+        parameters: [],
+        returns: '当前完整策略的独立副本。',
+      },
+      {
+        signature: 'async save(policy: RoutingPolicy): Promise<RoutingPolicy>',
+        description: '校验并持久化路由策略。',
+        parameters: [{ name: 'policy', description: '用户编辑的完整策略。' }],
+        returns: '持久化完成后的策略。',
+      },
+      {
+        signature: 'async validate(policy: RoutingPolicy): Promise<void>',
+        description: '验证设置中引用的路由，保留错误供用户修正。',
+        parameters: [{ name: 'policy', description: '待保存策略。' }],
+        returns: '所有明确模型存在时完成。',
+      },
+    ],
+  },
+  {
     key: 'lsp',
     summary: 'The LSP capability seam (`ctx.lsp`).',
     description: 'The LSP capability seam (`ctx.lsp`). Owns provider registration/selection and normalized query execution; exposes exactly the four operations and no protocol escape hatch.',
@@ -2724,6 +2774,48 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'provider-grouped models, the deployment default, and isolated provider failures.',
       },
       {
+        signature: '@Remote routingPolicy(): RoutingPolicy | null',
+        description: '读取当前部署的模型路由策略。',
+        parameters: [],
+        returns: '路由插件声明的策略；未加载插件时返回 null。',
+      },
+      {
+        signature: '@Remote saveRoutingPolicy(policy: RoutingPolicy): Promise<RoutingPolicy>',
+        description: '通过路由插件保存完整模型路由策略；插件缺失时拒绝请求。',
+        parameters: [{ name: 'policy', description: '直连或聚合模式的完整策略。' }],
+        returns: '校验并保存后的路由策略。',
+      },
+      {
+        signature: '@Remote libraryState(): LibraryState | null',
+        description: '读取当前机器上的会话历史归属状态。',
+        parameters: [],
+        returns: '历史库插件的当前状态；未加载插件时返回 null。',
+      },
+      {
+        signature: '@Remote setLibraryMode(mode: \'local\' | \'account\'): Promise<LibraryState>',
+        description: '切换当前可见的本机会话历史库；操作失败时返回结构化错误。',
+        parameters: [{ name: 'mode', description: '未绑定本机历史或当前账号历史。' }],
+        returns: '切换完成后的历史库状态。',
+      },
+      {
+        signature: '@Remote libraryCandidates(): Promise<LibraryCandidate[]>',
+        description: '列出可以迁入当前账号库的未绑定本机会话。',
+        parameters: [],
+        returns: '可供用户明确选择的完整会话组候选项。',
+      },
+      {
+        signature: '@Remote migrateLibrary(sessionIds: SessionId[]): Promise<string>',
+        description: '备份并迁入明确选定的完整会话组；失败时返回结构化错误。',
+        parameters: [{ name: 'sessionIds', description: '用户选择的完整父子会话组。' }],
+        returns: '迁入操作生成并校验的备份身份。',
+      },
+      {
+        signature: '@Remote restoreLibrary(backupId: string): Promise<LibraryState>',
+        description: '根据当前账号的备份恢复会话归属，保留迁入后新增内容。',
+        parameters: [{ name: 'backupId', description: '属于当前账号的迁入备份身份。' }],
+        returns: '恢复归属后的历史库状态。',
+      },
+      {
         signature: '@Remote canOpenWorkspacePath(): boolean',
         description: 'Report whether this deployment can hand a Session workspace path to a native desktop.',
         parameters: [],
@@ -2864,6 +2956,43 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'List file and directory candidates for one Agent\'s working directory.',
         parameters: [{ name: 'agent', description: 'target Agent resolved from the Session identity on the wire.' }, { name: 'query', description: 'path text following `@` or `@"`.' }, { name: 'signal', description: 'caller cancellation.' }],
         returns: 'deterministic path-only candidates from the composed provider.',
+      },
+    ],
+  },
+  {
+    key: 'sessionLibrary',
+    summary: '账号历史提供者；所有入口使用 SessionStore 的统一策略。',
+    description: '账号历史提供者；所有入口使用 SessionStore 的统一策略。',
+    methods: [
+      {
+        signature: 'describe(): LibraryState',
+        description: '读取当前逻辑库的可见状态。',
+        parameters: [],
+        returns: '当前逻辑库、账号可用性与本账号的备份。',
+      },
+      {
+        signature: 'setMode(mode: \'local\' | \'account\'): Promise<LibraryState>',
+        description: '停止运行任务后切换历史入口。',
+        parameters: [{ name: 'mode', description: '用户明确选择的本机或账号入口。' }],
+        returns: '提交后的状态。',
+      },
+      {
+        signature: 'async candidates(): Promise<LibraryCandidate[]>',
+        description: '列出可由用户明确迁入的会话。',
+        parameters: [],
+        returns: '未归属账号的会话，不自动迁入。',
+      },
+      {
+        signature: 'migrate(ids: readonly SessionId[]): Promise<string>',
+        description: '导出正文和附件并校验后原子迁入；父子会话必须一并选择。',
+        parameters: [{ name: 'ids', description: '用户选择的会话身份。' }],
+        returns: '迁入后可恢复的备份记录身份。',
+      },
+      {
+        signature: 'restore(id: string): Promise<LibraryState>',
+        description: '只恢复归属，聊天、标题、附件及工作室绑定均保留当前版本。',
+        parameters: [{ name: 'id', description: '本账号的备份身份。' }],
+        returns: '恢复后的状态。',
       },
     ],
   },
@@ -3166,6 +3295,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     summary: 'In-memory session store (`ctx.sessions`).',
     description: 'In-memory session store (`ctx.sessions`).\n\nPersistence is intentionally not implemented here — the agent lifecycle attaches a session-log writer to each published session\'s write handle; a session published outside that lifecycle persists nothing.',
     methods: [
+      {
+        signature: 'readonly access: SessionAccessRegistry',
+        description: '所有业务消费者共用的会话可见性策略。',
+        parameters: [],
+      },
       {
         signature: 'registerMessageProjection(projection: SessionMessageProjection): () => Promise<void>',
         description: 'Register one event interpreter for live creation, restore, and fork. Disposing the contribution makes sessions that used it refuse further derivation.',
@@ -4800,6 +4934,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'payload', description: '.signal - the turn abort signal. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.' }],
   },
   {
+    name: 'agent/resolve-model',
+    mode: 'waterfall',
+    signature: '\'agent/resolve-model\'(this: Scoped<Agent>, payload: { agent: Agent selected: ModelSelection | undefined signal: AbortSignal | undefined }, next: () => Promise<ModelSelection | undefined>): Promise<ModelSelection | undefined>',
+    summary: '在提示词组装前解析真实模型；返回值同时用于提示词和请求。',
+    description: '在提示词组装前解析真实模型；返回值同时用于提示词和请求。',
+    parameters: [{ name: 'payload', description: '.signal - 当前轮次的取消信号。' }, { name: 'next', description: '下游选择。' }],
+  },
+  {
     name: 'agent/status',
     mode: 'emit',
     signature: '\'agent/status\'(this: Scoped<Agent>, payload: { agent: Agent; status: AgentStatus }): void',
@@ -4819,41 +4961,41 @@ export const EVENT_API: readonly EventApiEntry[] = [
     name: 'api-session/activity',
     mode: 'emit',
     signature: '\'api-session/activity\'(sessionId: SessionId, updatedAt: number): void',
-    summary: 'One user-authored durable message advanced Session list activity.',
-    description: 'One user-authored durable message advanced Session list activity.',
-    parameters: [{ name: 'sessionId', description: 'addressed Session identity.' }, { name: 'updatedAt', description: 'durable message time used for list ordering.' }],
+    summary: '用户编写的持久化消息推进了会话列表的活动时间。',
+    description: '用户编写的持久化消息推进了会话列表的活动时间。',
+    parameters: [{ name: 'sessionId', description: '活动时间发生变化的会话身份。' }, { name: 'updatedAt', description: '用于列表排序的持久化消息时间。' }],
   },
   {
     name: 'api-session/added',
     mode: 'emit',
     signature: '\'api-session/added\'(summary: SessionSummary): void',
-    summary: 'A Session became visible or its Agent was created or disposed.',
-    description: 'A Session became visible or its Agent was created or disposed. Consumers upsert the summary and replace its current running and availability state.',
-    parameters: [{ name: 'summary', description: 'current list row for the Session.' }],
+    summary: '会话变为可见，或其 Agent 创建、释放后，发布当前列表摘要供消费者更新。',
+    description: '会话变为可见，或其 Agent 创建、释放后，发布当前列表摘要供消费者更新。',
+    parameters: [{ name: 'summary', description: '会话当前的运行与可用状态摘要。' }],
   },
   {
     name: 'api-session/error',
     mode: 'emit',
     signature: '\'api-session/error\'(sessionId: SessionId, message: string): void',
-    summary: 'One Agent failed outside a durable turn position.',
-    description: 'One Agent failed outside a durable turn position.',
-    parameters: [{ name: 'sessionId', description: 'Agent and Session identity.' }, { name: 'message', description: 'user-safe failure chain.' }],
+    summary: '一个 Agent 在没有持久化轮次位置的情况下报告失败。',
+    description: '一个 Agent 在没有持久化轮次位置的情况下报告失败。',
+    parameters: [{ name: 'sessionId', description: 'Agent 所属的会话身份。' }, { name: 'message', description: '可向用户展示的失败原因链。' }],
   },
   {
     name: 'api-session/removed',
     mode: 'emit',
     signature: '\'api-session/removed\'(sessionId: SessionId): void',
-    summary: 'A Session left the live Host registry.',
-    description: 'A Session left the live Host registry.',
-    parameters: [{ name: 'sessionId', description: 'removed Session identity.' }],
+    summary: '会话离开当前 Host 的活动注册表。',
+    description: '会话离开当前 Host 的活动注册表。',
+    parameters: [{ name: 'sessionId', description: '被移除的会话身份。' }],
   },
   {
     name: 'api-session/status',
     mode: 'emit',
     signature: '\'api-session/status\'(sessionId: SessionId, running: boolean): void',
-    summary: 'One Agent changed running state.',
-    description: 'One Agent changed running state.',
-    parameters: [{ name: 'sessionId', description: 'Agent and Session identity.' }, { name: 'running', description: 'whether the Agent is running.' }],
+    summary: '一个 Agent 的运行状态发生变化。',
+    description: '一个 Agent 的运行状态发生变化。',
+    parameters: [{ name: 'sessionId', description: 'Agent 所属的会话身份。' }, { name: 'running', description: 'Agent 当前是否正在运行。' }],
   },
   {
     name: 'app-boot/config-reload',
@@ -4974,6 +5116,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'An account model request requires the user to sign in.',
     description: 'An account model request requires the user to sign in.',
     parameters: [],
+  },
+  {
+    name: 'deepseek-account/platform-access',
+    mode: 'waterfall',
+    signature: '\'deepseek-account/platform-access\'(request: PlatformAccessRequest, signal: AbortSignal, next: () => Promise<PlatformAccessResponse | undefined>): Promise<PlatformAccessResponse | undefined>',
+    summary: '获取指定平台的浏览器访问验证；无人处理时继续委托。',
+    description: '获取指定平台的浏览器访问验证；无人处理时继续委托。',
+    parameters: [{ name: 'request', description: '来源和路径固定的账号请求，仅供私有通道使用。' }, { name: 'signal', description: '原请求的取消和超时信号。' }, { name: 'next', description: '委托下一个验证提供者。' }],
   },
   {
     name: 'deepseek-account/session-expired',
@@ -5112,6 +5262,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; callers own their request inputs and must keep them unchanged until the stream settles.' }],
   },
   {
+    name: 'llm/validate-input',
+    mode: 'waterfall',
+    signature: '\'llm/validate-input\'(this: LlmRuntime, options: GenerateOptions, model: Readonly<LlmResolvedModelInfo>, next: () => Promise<void>): Promise<void>',
+    summary: '在输入投影前检查已捕获的模型能力；错误转换成请求失败，不另行解析模型。',
+    description: '在输入投影前检查已捕获的模型能力；错误转换成请求失败，不另行解析模型。',
+    parameters: [{ name: 'options', description: '本次请求。' }, { name: 'model', description: '与实际派发绑定的模型元数据。' }, { name: 'next', description: '委派后续输入检查。' }],
+  },
+  {
     name: 'mcp-manager/status',
     mode: 'parallel',
     signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void | Promise<void>',
@@ -5198,6 +5356,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Transform one outbound record before it reaches the backend.',
     description: 'Transform one outbound record before it reaches the backend. This waterfall is the Service Definition\'s redaction extension point. It ships NO rules of its own: the innermost `next()` passes the record through unchanged, and with no listener mounted records reach the backend as captured, so exported data is exactly as clean as the rules a deployment mounts. Listeners stack by transforming `next()`\'s return value; returning without `next()` replaces everything beneath. Dispatched synchronously on the capture hot path inside the coordinator\'s containment: a throwing listener withholds that one record (fail-closed) and never reaches the agent loop. Live capture dispatches at append time; on-demand capture dispatches while reading the canonical log. Redaction applies to the exported copy only; the canonical session log is never rewritten.',
     parameters: [{ name: 'record', description: 'the candidate record, already the coordinator\'s own deep copy; listeners return a (possibly new) record and must not mutate it.' }],
+  },
+  {
+    name: 'session/access-changed',
+    mode: 'emit',
+    signature: '\'session/access-changed\'(): void',
+    summary: '可见会话集合改变；订阅者必须丢弃旧账号缓存。 @mode emit',
+    description: '可见会话集合改变；订阅者必须丢弃旧账号缓存。 @mode emit',
+    parameters: [],
   },
   {
     name: 'session/created',
@@ -5294,6 +5460,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Emitted when any prompt provider changes.',
     description: 'Emitted when any prompt provider changes. This registry notification is unfiltered because a global change affects every scope.',
     parameters: [],
+  },
+  {
+    name: 'system-prompt/tool-schemas',
+    mode: 'waterfall',
+    signature: '\'system-prompt/tool-schemas\'(schemas: ToolSchema[], context: AssembleContext, next: () => Promise<ToolSchema[]>): Promise<ToolSchema[]>',
+    summary: '在排序前调整已提供的工具说明与参数文本。',
+    description: '在排序前调整已提供的工具说明与参数文本。',
+    parameters: [{ name: 'schemas', description: '已收集的工具声明。' }, { name: 'context', description: '当前组装上下文。' }, { name: 'next', description: '下游声明处理。' }],
   },
   {
     name: 'tools/change',
@@ -5453,7 +5627,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AccountDetails',
-    declaration: 'export interface AccountDetails {\n    readonly profile: {\n        readonly status: \'ready\';\n        readonly value: AccountProfile;\n    } | {\n        readonly status: \'failed\';\n    };\n    readonly balance: {\n        readonly status: \'ready\';\n        readonly value: readonly AccountWallet[];\n        readonly bonusWallets: readonly AccountWallet[];\n    } | {\n        readonly status: \'failed\';\n    };\n}',
+    declaration: 'export interface AccountDetails {\n    readonly profile: {\n        readonly status: \'ready\';\n        readonly value: AccountProfile;\n    } | {\n        readonly status: \'failed\';\n        readonly errorCode?: \'access-blocked\';\n    };\n    readonly balance: {\n        readonly status: \'ready\';\n        readonly value: readonly AccountWallet[];\n        readonly bonusWallets: readonly AccountWallet[];\n    } | {\n        readonly status: \'failed\';\n    };\n}',
   },
   {
     name: 'AccountLinks',
@@ -5898,10 +6072,6 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CommandInvocation',
     declaration: 'export interface CommandInvocation {\n    readonly commandId: CommandId;\n    readonly agent: Agent;\n    readonly rawInput: string;\n    readonly attachments: readonly (ImageBlock | FileBlock)[];\n    readonly signal: AbortSignal;\n}',
-  },
-  {
-    name: 'CommandResult',
-    declaration: 'export type CommandResult = {\n    readonly kind: \'success\';\n    readonly text?: string;\n    readonly sourceEventSeq?: SessionSeq;\n} | {\n    readonly kind: \'error\';\n    readonly text: string;\n};',
   },
   {
     name: 'CommandRunInput',
@@ -6736,6 +6906,30 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ImageVariantId = Branded<\'ImageVariantId\'>;',
   },
   {
+    name: 'ImportCandidate',
+    declaration: 'export interface ImportCandidate {\n    id: ImportCandidateId;\n    app: string;\n    name: string;\n    providerId: string;\n    baseURL: string;\n    api: string;\n    models: string[];\n    hasCredential: boolean;\n    status: \'ready\' | \'incomplete\' | \'unsupported\' | \'existing\';\n}',
+  },
+  {
+    name: 'ImportCandidateId',
+    declaration: 'export type ImportCandidateId = Branded<\'CcSwitchImportCandidate\'>;',
+  },
+  {
+    name: 'ImportResult',
+    declaration: 'export interface ImportResult {\n    id: ImportCandidateId;\n    providerId: string;\n    status: \'imported\' | \'existing\' | \'failed\';\n    reason: string;\n}',
+  },
+  {
+    name: 'ImportScan',
+    declaration: 'export interface ImportScan {\n    token: ImportScanToken;\n    directory: string;\n    candidates: ImportCandidate[];\n    protocols: string[];\n}',
+  },
+  {
+    name: 'ImportScanToken',
+    declaration: 'export type ImportScanToken = Branded<\'CcSwitchImportScan\'>;',
+  },
+  {
+    name: 'ImportSelection',
+    declaration: 'export interface ImportSelection {\n    id: ImportCandidateId;\n    providerId: string;\n    baseURL: string;\n    api: string;\n    models: string[];\n    apiKey?: string | undefined;\n}',
+  },
+  {
     name: 'IncompatiblePlugin',
     declaration: 'export interface IncompatiblePlugin {\n    name: string;\n    version: string;\n    runtimeVersion: string;\n    requirements: Record<string, string>;\n}',
   },
@@ -6938,6 +7132,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'KvUnitDescriptor',
     declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n}',
+  },
+  {
+    name: 'LibraryBackup',
+    declaration: 'export interface LibraryBackup {\n    id: string;\n    createdAt: number;\n    count: number;\n    restored: boolean;\n}',
+  },
+  {
+    name: 'LibraryCandidate',
+    declaration: 'export interface LibraryCandidate {\n    sessionId: SessionId;\n    createdAt: number;\n    cwd: string;\n}',
+  },
+  {
+    name: 'LibraryState',
+    declaration: 'export interface LibraryState {\n    mode: \'local\' | \'account\';\n    accountAvailable: boolean;\n    library: \'local\' | \'custom\' | null;\n    backups: LibraryBackup[];\n}',
   },
   {
     name: 'ListVersionsOptions',
@@ -7341,7 +7547,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ModelCatalogModel',
-    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoning?: ModelReasoning;\n    readonly badge?: LlmModelBadge;\n}',
+    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoning?: ModelReasoning;\n    readonly inputModalities?: readonly string[];\n    readonly badge?: LlmModelBadge;\n}',
   },
   {
     name: 'ModelMessageSource',
@@ -7526,6 +7732,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PiAiRequestHeaderContext',
     declaration: 'export interface PiAiRequestHeaderContext extends Readonly<Pick<GenerateOptions<string>, \'provider\' | \'model\' | \'sessionId\' | \'purpose\'>> {\n    readonly baseURL: string;\n}',
+  },
+  {
+    name: 'PlatformAccessRequest',
+    declaration: 'export interface PlatformAccessRequest {\n    readonly origin: string;\n    readonly path: string;\n    readonly method: \'GET\' | \'POST\';\n    readonly headers: Readonly<Record<string, string>>;\n    readonly body?: string;\n}',
+  },
+  {
+    name: 'PlatformAccessResponse',
+    declaration: 'export type PlatformAccessResponse = {\n    readonly status: number;\n    readonly headers: Readonly<Record<string, string>>;\n    readonly body: string;\n} | {\n    readonly errorCode: \'no-response\' | \'access-blocked\' | \'protocol\';\n};',
   },
   {
     name: 'PlatformSession',
@@ -7993,7 +8207,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RequestErrorAction',
-    declaration: 'export type RequestErrorAction = {\n    kind: \'retry\';\n} | undefined;',
+    declaration: 'export type RequestErrorAction = {\n    kind: \'retry\';\n    refreshPrompt?: true;\n} | undefined;',
   },
   {
     name: 'RequestHeaderReason',
@@ -8066,6 +8280,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ReviewDecision',
     declaration: 'export type ReviewDecision = \'approved\' | \'changes-requested\' | \'review-required\' | \'none\';',
+  },
+  {
+    name: 'Route',
+    declaration: 'export interface Route {\n    provider: string;\n    model: string;\n}',
+  },
+  {
+    name: 'RoutingPolicy',
+    declaration: 'export interface RoutingPolicy {\n    mode: \'direct\' | \'aggregate\';\n    routes: readonly Route[];\n    defaultIndex: number;\n    retriesPerRoute: number;\n    delayMs: number;\n    budgetMs: number;\n}',
   },
   {
     name: 'RpcId',
@@ -8276,6 +8498,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionAccess = \'read\' | \'write\';',
   },
   {
+    name: 'SessionAccessRegistry',
+    declaration: 'export class SessionAccessRegistry {\n    constructor(private readonly ctx: Context);\n    get signal(): AbortSignal;\n    get revision(): number;\n    allows(id: SessionId): boolean;\n    assert(id: SessionId): void;\n    register(policy: (id: SessionId) => boolean): () => Promise<void>;\n    invalidate(): void;\n}',
+  },
+  {
     name: 'SessionActivity',
     declaration: 'export interface SessionActivity {\n    readonly kind: SessionActivityKind;\n    readonly items?: readonly SessionActivityItem[];\n}',
   },
@@ -8465,7 +8691,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionForkRequest',
-    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n}',
+    declaration: 'export interface SessionForkRequest {\n    readonly sessionId: SessionId;\n    readonly atSeq?: number;\n    readonly allowMigration?: boolean;\n    readonly readableHistory?: boolean;\n}',
   },
   {
     name: 'SessionForkSource',
@@ -8769,7 +8995,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSelectModelRequest',
-    declaration: 'export interface SessionSelectModelRequest extends ModelSelection {\n    readonly sessionId: SessionId;\n}',
+    declaration: 'export interface SessionSelectModelRequest extends ModelSelection {\n    readonly saveAsDefault?: boolean;\n    readonly sessionId: SessionId;\n}',
   },
   {
     name: 'SessionSelectModelValue',
@@ -9033,7 +9259,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SignInErrorCode',
-    declaration: 'export type SignInErrorCode = \'no-response\' | \'network\' | \'protocol\' | \'expired\' | \'storage\';',
+    declaration: 'export type SignInErrorCode = \'no-response\' | \'network\' | \'access-blocked\' | \'protocol\' | \'expired\' | \'storage\';',
   },
   {
     name: 'SkillCandidate',

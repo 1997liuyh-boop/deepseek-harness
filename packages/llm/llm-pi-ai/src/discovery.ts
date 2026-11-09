@@ -85,6 +85,20 @@ interface ListingEntry {
   maxTokens?: unknown
   limit?: ListingLimit | null
   top_provider?: ListingTopProvider | null
+  input?: unknown
+  inputModalities?: unknown
+  input_modalities?: unknown
+  architecture?: { input_modalities?: unknown } | null
+  modalities?: { input?: unknown } | null
+}
+
+/** 只采纳目录明确公布且本适配器支持的输入类型，不根据模型名称猜测。 */
+function inputTypes(entry: ListingEntry | null): ('text' | 'image')[] | undefined {
+  const value = entry?.inputModalities ?? entry?.input_modalities
+    ?? entry?.architecture?.input_modalities ?? entry?.modalities?.input ?? entry?.input
+  if (!Array.isArray(value) || value.length === 0 || value.some(item => typeof item !== 'string')) return undefined
+  const supported = (['text', 'image'] as const).filter(item => value.includes(item))
+  return supported.length === 0 ? undefined : supported
 }
 
 /** A positive integer field of a listing entry, or `undefined` when absent or unusable. */
@@ -204,6 +218,7 @@ function readListing(body: unknown): LlmDiscoveredModel[] {
     const id = label(key, entry?.id)
     if (id === undefined) continue
     const name = label(entry?.name, entry?.display_name, entry?.displayName) ?? id
+    const inputModalities = inputTypes(entry)
     const contextWindow = capacity(
       entry?.contextWindow,
       entry?.context_window,
@@ -224,6 +239,7 @@ function readListing(body: unknown): LlmDiscoveredModel[] {
       name,
       ...contextWindow === undefined ? {} : { contextWindow },
       ...maxTokens === undefined ? {} : { maxTokens },
+      ...inputModalities === undefined ? {} : { inputModalities },
     })
   }
   return models

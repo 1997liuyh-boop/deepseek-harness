@@ -1,0 +1,46 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/session/session-library/README.md
+/:
+  en: 15163f0a841e1ba6
+  zh: 48f14f164e81fd2f
+/deepseek-ai-dsh-session-library:
+  en: 41a98a398156dd6a
+  zh: 5261096ca42ab9c8
+/deepseek-ai-dsh-session-library/summary:
+  en: 35523f7e1d3fe79a
+  zh: 9773f9079a43eed2
+/deepseek-ai-dsh-session-library/table-of-contents:
+  en: 23386452a66b2fbd
+  zh: 4cf93c4bf17b3da2
+/deepseek-ai-dsh-session-library/use-this-package:
+  en: f5d1729a7631f37e
+  zh: 83932bc2161fadb2
+/deepseek-ai-dsh-session-library/understand-the-implementation:
+  en: 83717703261f0b3e
+  zh: b1c5900c16dc4a21
+/deepseek-ai-dsh-session-library/further-exploration:
+  en: b85b8e390710bea4
+  zh: 28535e1545d39594
+/deepseek-ai-dsh-session-library/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-session-library/model-experience/account-owned-history:
+  en: 72cdd76797715b0a
+  zh: 6e384374cbda75ae
+/deepseek-ai-dsh-session-library/model-experience/account-owned-history/what-the-model-sees:
+  en: 30d35a0e5d919a09
+  zh: b03dcd39408a1353
+/deepseek-ai-dsh-session-library/model-experience/account-owned-history/token-effect:
+  en: 5aeefe81c1fba63a
+  zh: d335f4dee74bf560
+/deepseek-ai-dsh-session-library/model-experience/account-owned-history/kv-cache-effect:
+  en: db0f0285b582e171
+  zh: d9ef5ed3d923fd28
+/deepseek-ai-dsh-session-library/known-limitations-and-deferred-work:
+  en: 05c26aedf6137497
+  zh: 3756c2ba38d9ac96
+/deepseek-ai-dsh-session-library/known-limitations-and-deferred-work/dev-note:
+  en: 0a1253c6f7b5e8b9
+  zh: 9f56528562c7c914

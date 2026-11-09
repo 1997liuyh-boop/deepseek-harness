@@ -1,0 +1,17 @@
+@reference "tailwindcss";
+.section { @apply flex flex-col gap-4 min-w-0; }
+.card { @apply flex flex-col gap-3 min-w-0 m-0 p-4 rounded-xl border border-solid border-[var(--dsw-alias-border-l4)] bg-[var(--dsw-alias-bg-module-platform)]; }
+.title { @apply px-1 text-sm font-medium text-[var(--dsw-alias-label-primary)]; }
+.hint { @apply m-0 text-[13px] leading-relaxed text-[var(--dsw-alias-label-secondary)]; }
+.row { @apply flex flex-wrap items-center gap-2 min-w-0; }
+.route { @apply flex flex-wrap items-center justify-between gap-2 py-1 min-w-0; }
+.choice { @apply flex items-center gap-2 min-w-0 text-[13px] text-[var(--dsw-alias-label-primary)]; }
+.choice span { @apply min-w-0 break-all; }
+.choice small { @apply block text-xs text-[var(--dsw-alias-label-secondary)]; }
+.select { @apply flex-1 min-w-0 max-w-full px-2 py-2 rounded-lg border border-solid border-[var(--dsw-alias-border-l4)] bg-[var(--dsw-alias-bg-module-platform)] text-[var(--dsw-alias-label-primary)] text-[13px]; }
+.options { @apply grid grid-cols-1 gap-3 sm:grid-cols-3; }
+.field { @apply flex flex-col gap-2 min-w-0 text-[13px] text-[var(--dsw-alias-label-secondary)]; }
+.input { @apply w-full min-w-0 box-border rounded-lg px-2 py-2 border border-solid border-[var(--dsw-alias-border-l4)] bg-[var(--dsw-alias-bg-module-platform)] text-[var(--dsw-alias-label-primary)]; }
+.summary { @apply cursor-pointer py-2 text-[13px] text-[var(--dsw-alias-label-primary)]; }
+.list { @apply flex flex-col gap-3 max-h-60 overflow-y-auto my-3; }
+.error { @apply flex flex-col gap-2 text-[13px] text-[var(--dsw-alias-label-error)]; }

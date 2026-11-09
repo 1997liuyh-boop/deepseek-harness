@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-05-deepseek-open-platform-key-shape.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-11-05-deepseek-open-platform-key-shape.md
+/agent-note-deepseek-credential-shape-and-account-balance-precedence:
+  en: 8ee2ea64e7ad673c
+  zh: 34ffe18e7d0eacad
+/agent-note-deepseek-credential-shape-and-account-balance-precedence/problem:
+  en: aaabdb931d3a3342
+  zh: b80822f0d2906f95
+/agent-note-deepseek-credential-shape-and-account-balance-precedence/decision:
+  en: 5a51d4408e99a913
+  zh: 4271ffec68930664
+/agent-note-deepseek-credential-shape-and-account-balance-precedence/alternatives-considered:
+  en: aa9b0d4646e9781b
+  zh: 081c9dfd00d9881c
+/agent-note-deepseek-credential-shape-and-account-balance-precedence/consequences:
+  en: a75fd1ab2d47a79b
+  zh: b1534f099be8265b
+/agent-note-deepseek-credential-shape-and-account-balance-precedence/testing:
+  en: b7bf68578ac9e84b
+  zh: 6208ef8204697e38

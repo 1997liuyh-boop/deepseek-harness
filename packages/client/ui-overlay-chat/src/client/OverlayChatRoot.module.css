@@ -1,0 +1,30 @@
+/*! tailwindcss v4.3.4 | MIT License | https://tailwindcss.com */
+:global(html), :global(body) {
+  margin: 0px;
+  height: 100%;
+  overflow: hidden;
+}
+:global(html) {
+  background-color: transparent;
+}
+:global(body) {
+  background-color: var(--dsw-alias-bg-base);
+}
+:global(#root) {
+  height: 100%;
+}
+.shell {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: auto;
+  --dsh-chat-content-width: 100%;
+  --dsh-composer-side-clearance: 0px;
+}
+.shell :global([data-chat-turn-rail]) {
+  display: none;
+}
+.inputOverlay {
+  width: 0px;
+  height: 0px;
+  overflow: visible;
+}

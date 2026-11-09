@@ -1,0 +1,171 @@
+/*! tailwindcss v4.3.4 | MIT License | https://tailwindcss.com */
+@layer properties;
+.card {
+  display: flex;
+  min-width: 0px;
+  flex-direction: column;
+  gap: calc(var(--spacing, 0.25rem) * 3);
+  border-radius: var(--radius-xl, 0.75rem);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  --tw-border-style: solid;
+  border-style: solid;
+  border-color: var(--dsw-alias-border-l4);
+  background-color: var(--dsw-alias-bg-module-platform);
+  padding: calc(var(--spacing, 0.25rem) * 4);
+}
+.title {
+  margin: 0px;
+  font-size: var(--text-sm, 0.875rem);
+  line-height: var(--tw-leading, var(--text-sm--line-height, calc(1.25 / 0.875)));
+  --tw-font-weight: var(--font-weight-medium, 500);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--dsw-alias-label-primary);
+}
+.hint {
+  margin: 0px;
+  font-size: 13px;
+  --tw-leading: var(--leading-relaxed, 1.625);
+  line-height: var(--leading-relaxed, 1.625);
+  color: var(--dsw-alias-label-secondary);
+}
+.dialog.dialog {
+  height: 70vh;
+  max-height: 100%;
+  width: 760px;
+  max-width: 100%;
+}
+.content {
+  min-height: 0px;
+  flex: 1;
+}
+.content > :first-child {
+  flex-shrink: 0;
+}
+.content > :last-child {
+  min-height: 0px;
+  flex: 1;
+  overflow-y: auto;
+}
+.body {
+  display: flex;
+  min-height: 0px;
+  min-width: 0px;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(var(--spacing, 0.25rem) * 3);
+}
+.body > :not(.list) {
+  flex-shrink: 0;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(var(--spacing, 0.25rem) * 2);
+}
+.field {
+  display: flex;
+  min-width: 0px;
+  flex-direction: column;
+  gap: calc(var(--spacing, 0.25rem) * 2);
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+.input {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0px;
+  border-radius: var(--radius-lg, 0.5rem);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  --tw-border-style: solid;
+  border-style: solid;
+  border-color: var(--dsw-alias-border-l4);
+  background-color: var(--dsw-alias-bg-module-platform);
+  padding-inline: calc(var(--spacing, 0.25rem) * 2);
+  padding-block: calc(var(--spacing, 0.25rem) * 2);
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+.list {
+  display: flex;
+  min-height: 0px;
+  min-width: 0px;
+  flex: 1;
+  flex-direction: column;
+  gap: calc(var(--spacing, 0.25rem) * 3);
+  overflow-y: auto;
+}
+.item {
+  min-width: 0px;
+  border-radius: var(--radius-lg, 0.5rem);
+  border-style: var(--tw-border-style);
+  border-width: 1px;
+  --tw-border-style: solid;
+  border-style: solid;
+  border-color: var(--dsw-alias-border-l4);
+  padding: calc(var(--spacing, 0.25rem) * 3);
+}
+.choice {
+  display: flex;
+  min-width: 0px;
+  align-items: flex-start;
+  gap: calc(var(--spacing, 0.25rem) * 2);
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+}
+.choice span {
+  min-width: 0px;
+  overflow-wrap: break-word;
+}
+.choice small {
+  margin-top: var(--spacing, 0.25rem);
+  display: block;
+  font-size: var(--text-xs, 0.75rem);
+  line-height: var(--tw-leading, var(--text-xs--line-height, calc(1 / 0.75)));
+  color: var(--dsw-alias-label-secondary);
+}
+.summary {
+  cursor: pointer;
+  padding-block: calc(var(--spacing, 0.25rem) * 2);
+  font-size: 13px;
+  color: var(--dsw-alias-label-secondary);
+}
+.fields {
+  margin: 0px;
+  display: flex;
+  min-width: 0px;
+  flex-direction: column;
+  gap: calc(var(--spacing, 0.25rem) * 3);
+  border-style: var(--tw-border-style);
+  border-width: 0px;
+  padding: 0px;
+}
+.error {
+  margin: 0px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-error);
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-leading {
+  syntax: "*";
+  inherits: false;
+}
+@layer properties {
+  @supports ((-webkit-hyphens: none) and (not (margin-trim: block))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
+    *, ::before, ::after, ::backdrop {
+      --tw-border-style: solid;
+      --tw-font-weight: initial;
+      --tw-leading: initial;
+    }
+  }
+}

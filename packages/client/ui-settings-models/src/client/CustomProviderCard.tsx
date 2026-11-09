@@ -17,12 +17,7 @@
  * and at least one model — are required here rather than at load, so the
  * failure names the field while the user is still looking at it.
  *
- * There is deliberately no provider-scoped reasoning-effort control, here or
- * on the editor card: effort is a per-MODEL capability, and the models under
- * one provider disagree about it, so a provider-scoped control can only be set
- * to a value some of them reject. Each model row of a hand-declared route
- * declares its own `reasoningEfforts` instead, and the composer's model picker
- * offers each model those levels.
+ * 模型设置不编辑思考程度；会话模型选择器沿用适配器声明的可用档位。
  */
 
 import { useEffect, useState } from 'react'
@@ -34,7 +29,6 @@ import { EditorFooter } from './EditorFooter.tsx'
 import { validateDeepSeekModels } from './DeepSeekModelsEditor.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import type { ModelDraft } from './ModelListEditor.tsx'
-import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
 import { deriveKeyRef } from './store.ts'
 import { protocolLabel } from './protocol-label.ts'
 import type { ModelsOperations } from './operations.ts'
@@ -69,8 +63,6 @@ export interface CustomProviderCardProps {
   taken: readonly string[]
   /** Wire protocols the adapter can serve, in the order it reports them. */
   protocols: readonly string[]
-  /** Reasoning levels the adapter's schema accepts, in escalation order; empty shows no reasoning control. */
-  reasoningLevels: readonly string[]
   /**
    * Revision of the `llm-pi-ai` user section this card opened at, sent with
    * the create so a route another tab declared meanwhile is a refusal rather
@@ -98,7 +90,7 @@ export interface CustomProviderCardProps {
  * @returns the creation card.
  */
 export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
-  const { taken, protocols, reasoningLevels, operations, t, onBusyChange } = props
+  const { taken, protocols, operations, t, onBusyChange } = props
   // The write is checked against the revision on which this draft was opened.
   const [openedAt] = useState(() => props.revision)
   const [route, setRoute] = useState('')
@@ -125,11 +117,8 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   const routeTaken = taken.includes(route)
   const normalizedBaseURL = baseURL.trim()
   const baseUrlInvalid = baseURL.length > 0 && !isHttpUrl(normalizedBaseURL)
-  // Rows are checked by the same per-row validator the editor cards use, so a
-  // bad row is named by its position here too. Capacities have route-level
-  // fallbacks; what a route cannot default is at least one model. Every row of
-  // this hand-declared route edits its reasoning levels, so they are checked too.
-  const modelFailure = validateDeepSeekModels(models) ?? validateReasoningEfforts(models)
+  // 新建提供商必须声明至少一个模型；可编辑字段使用共享模型校验。
+  const modelFailure = validateDeepSeekModels(models)
   const keyFailure = apiKeyFailure(keyDraft)
   // The typed key with paste whitespace removed. A blank field yields an empty
   // string, which the create path reads as "no key supplied" — a route may
@@ -292,7 +281,6 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
       <ModelListEditor
         models={models}
         onChange={setModels}
-        reasoningLevels={reasoningLevels}
         probe={{
           settingsNs: NS,
           baseURL: normalizedBaseURL,

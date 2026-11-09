@@ -99,8 +99,10 @@ export class SessionObservationReader {
     sessionId: SessionId,
     options: SessionObservationOptions = {},
   ): Promise<SessionObservation> {
-    const { signal, projectionMode = 'all' } = options
+    const { projectionMode = 'all' } = options
+    const signal = AbortSignal.any([this.ctx.sessions.access.signal, ...options.signal === undefined ? [] : [options.signal]])
     for (;;) {
+      this.ctx.sessions.access.assert(sessionId)
       throwIfObservationAborted(signal)
       const live = this.ctx.sessions.get(sessionId)
       if (live !== undefined) return this.live(live, projectionMode)

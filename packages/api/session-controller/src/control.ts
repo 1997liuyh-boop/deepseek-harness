@@ -32,6 +32,9 @@ export class SessionControlController {
       for (const stream of this.streams) stream.end()
       this.streams.clear()
     }, 'session-controller.control')
+    ctx.on('session/access-changed', () => {
+      for (const stream of this.streams) stream.reset({ type: 'baseline', value: this.baseline() })
+    })
   }
 
   /**
@@ -53,7 +56,7 @@ export class SessionControlController {
   }
 
   private baseline(): SessionControlBaseline {
-    const sessions = this.ctx.sessions.list()
+    const sessions = this.ctx.sessions.list().filter(session => this.ctx.sessions.access.allows(session.id))
     return {
       projections: this.projectionBaseline(sessions),
     }
@@ -75,6 +78,7 @@ export class SessionControlController {
   }
 
   private broadcast(frame: SessionControlFrame): void {
+    if (frame.type === 'projection' && !this.ctx.sessions.access.allows(frame.sessionId)) return
     for (const stream of this.streams) stream.push(frame)
   }
 }
@@ -83,6 +87,11 @@ class ControlQueue {
   private readonly buffer = new Deque<SessionControlFrame>()
   private wake: (() => void) | undefined
   private done = false
+
+  reset(frame: SessionControlFrame): void {
+    this.buffer.clear()
+    this.push(frame)
+  }
 
   push(frame: SessionControlFrame): void {
     if (this.done) return

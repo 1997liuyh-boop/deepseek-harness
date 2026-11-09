@@ -262,7 +262,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-session-controller`
 
 - `inject`: `agentDefaultModel` · `agents` · `attachments` · `fileUploads` · `fs` · `llm` · `remoteAccess` · `sessions` · `sessionProjections` · `sessionQuery` · `typert` · `typertGateway` · `workspaceRegistry`
-- `source`: [`packages/api/session-controller/src/index.ts:110`](../packages/api/session-controller/src/index.ts)
+- `source`: [`packages/api/session-controller/src/index.ts:115`](../packages/api/session-controller/src/index.ts)
 
 ```ts config-catalog
 /** Session Controller deployment policy. */
@@ -655,6 +655,17 @@ export type OnboardingProcess = 'compact' | 'standard' | 'detailed'
 export interface Config {
   /** Offer the browser API-key step when no native shell owns credential onboarding. */
   credentialOnboarding: boolean
+  /** 本机供应商导入的输入限制和预览有效期。 */
+  ccSwitchImport: {
+    /** 单次扫描允许读取的供应商数量上限。 */
+    maxProviders: number
+    /** 单个配置文件允许读取的字节数上限。 */
+    maxConfigBytes: number
+    /** 导入预览的有效期，单位为毫秒。 */
+    scanTtlMs: number
+    /** 导入时查询供应商模型列表的超时，单位为毫秒。 */
+    modelQueryTimeoutMs: number
+  }
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-client-ui-settings-models -->
@@ -1941,6 +1952,8 @@ export interface Config extends Omit<ProtocolConfig, 'models'>, ModelListingConf
 export interface Config extends ProtocolConfig, ModelListingConfig {
   /** Credential reference resolved per request; defaults to DEEPSEEK_API_KEY. */
   apiKeyEnv: Volatile<string>
+  /** 查询模型及验证密钥的超时毫秒数。 */
+  discoveryTimeoutMs: Volatile<number>
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-deepseek-api-key -->
@@ -2328,6 +2341,48 @@ export interface ReplayModelConfig {
 export type Config = Readonly<Record<string, never>>
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-retry -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-llm-routing -->
+<a id="deepseek-aidsh-llm-routing"></a>
+
+## `@deepseek-ai/dsh-llm-routing`
+
+- `inject`: `llm` · `agents` · `agentDefaultModel`
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/llm/llm-routing/src/index.ts:19`](../packages/llm/llm-routing/src/index.ts)
+
+```ts config-catalog
+/** 可通过设置热更新的聚合策略。 */
+export interface Config {
+  /** 每轮捕获，后续设置修改在新轮次生效。 */
+  policy: Volatile<RoutingPolicy>
+}
+
+/** 一次请求恢复期间保持不变的路由配置。 */
+export interface RoutingPolicy {
+  /** 直连或按候选队列顺序恢复。 */
+  mode: 'direct' | 'aggregate'
+  /** 默认项之后按此顺序尝试其他候选。 */
+  routes: readonly Route[]
+  /** 默认候选在队列中的下标。 */
+  defaultIndex: number
+  /** 每个候选的额外重试次数。 */
+  retriesPerRoute: number
+  /** 每次恢复前的最短等待毫秒数。 */
+  delayMs: number
+  /** 一次步骤恢复的总调度预算，单位毫秒。 */
+  budgetMs: number
+}
+
+/** 一个明确的供应商与模型配对。 */
+export interface Route {
+  /** 已注册的真实供应商标识。 */
+  provider: string
+  /** 该供应商中的明确模型标识。 */
+  model: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-llm-routing -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-lsp-stdio -->
 <a id="deepseek-aidsh-lsp-stdio"></a>
@@ -3063,6 +3118,25 @@ export interface JsonRpcConfig {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-sdk-jsonrpc-server -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-library -->
+<a id="deepseek-aidsh-session-library"></a>
+
+## `@deepseek-ai/dsh-session-library`
+
+- `inject`: `sessions` · `sessionPersistence` · `sessionQuery` · `agents` · `attachments`
+- `source`: [`packages/session/session-library/src/index.ts:31`](../packages/session/session-library/src/index.ts)
+
+```ts config-catalog
+/** 归属索引与可验证备份的独立目录。 */
+export interface Config {
+  /** 归属索引、维护记录和备份的专用目录。 */
+  root: string
+  /** 文件维护租约失效毫秒数，至少为 5000。 */
+  lockStaleMs: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-session-library -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-session-log-deepseek -->
 <a id="deepseek-aidsh-session-log-deepseek"></a>
@@ -4067,6 +4141,27 @@ export interface Config {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-bash-persistent -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-computer-use -->
+<a id="deepseek-aidsh-tool-computer-use"></a>
+
+## `@deepseek-ai/dsh-tool-computer-use`
+
+- `inject`: `tools` · `systemPrompt` · `attachments` · `sessionProjections`
+- `source`: [`packages/computer-use/tool-computer-use/src/config.ts:11`](../packages/computer-use/tool-computer-use/src/config.ts)
+
+```ts config-catalog
+/** 桌面控制插件的可选部署配置。 */
+export interface Config {
+
+
+
+
+  /** 桌面操作完成后，等待窗口稳定再观察和截图的毫秒数；默认 600。 */
+  readonly postActionWaitMs?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-tool-computer-use -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-tool-executor-ptc -->
 <a id="deepseek-aidsh-tool-executor-ptc"></a>
 
@@ -4928,6 +5023,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-message-feedback` | — | [`packages/client/ui-message-feedback/src/index.ts`](../packages/client/ui-message-feedback/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-model-selection` | — | [`packages/client/ui-model-selection/src/index.ts`](../packages/client/ui-model-selection/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-open-in-app` | — | [`packages/client/ui-open-in-app/src/index.ts`](../packages/client/ui-open-in-app/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-overlay-chat` | — | [`packages/client/ui-overlay-chat/src/index.ts`](../packages/client/ui-overlay-chat/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-permission-presets` | — | [`packages/client/ui-permission-presets/src/index.ts`](../packages/client/ui-permission-presets/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plan` | — | [`packages/client/ui-plan/src/index.ts`](../packages/client/ui-plan/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-plugin-market` | — | [`packages/client/ui-plugin-market/src/index.ts`](../packages/client/ui-plugin-market/src/index.ts) |
@@ -4940,6 +5036,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 | `@deepseek-ai/dsh-client-ui-settings` | — | [`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-agent-loop` | — | [`packages/client/ui-settings-agent-loop/src/index.ts`](../packages/client/ui-settings-agent-loop/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-general` | — | [`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-settings-orb` | — | [`packages/client/ui-settings-orb/src/index.ts`](../packages/client/ui-settings-orb/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` | — | [`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-plugins` | — | [`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-session-log` | — | [`packages/client/ui-settings-session-log/src/index.ts`](../packages/client/ui-settings-session-log/src/index.ts) |

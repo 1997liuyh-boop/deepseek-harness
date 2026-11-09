@@ -1,18 +1,19 @@
-/**
- * Web question plugin, browser half: QuestionComposer registered as a
- * selector-routed entry of the conversation-declared composer chain, plus the
- * `question` dictionaries. The selector narrows the owner's currency to the
- * question carrier (matched prop), and the whole behavior surface rides the
- * carrier (domain encoding in contract/slots.ts PendingQuestion); copy rides
- * the standard locale seat. Export discipline: packages/client/AGENTS.md.
- *
- * One entry, two presentations: the composer renders a request with a
- * `plan-review` intent as the plan decision card and every other request as
- * the generic question flow. Both use the same carrier and composer seat.
- */
+
+
+
+
+
+
+
+
+
+
+
+
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { InboxWireState } from '@deepseek-ai/dsh-agent/types'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -20,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { PendingInteractionPublisher } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { TypertClientEventListener } from '@deepseek-ai/dsh-typert-protocol'
 import type { AskUserQuestionItem, PendingUserQuestion, UserQuestionProjectionView } from '@deepseek-ai/dsh-user-questions/types'
-// Type-only: pulls the locale plugin's Context merge (ctx.locale).
+
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type { UserQuestionPanels, UserQuestionRecord } from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -39,12 +40,12 @@ export type { QuestionKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** The question composer's copy. */
+
     question: QuestionKey
   }
 }
 
-/** Dictionary namespace owned by this plugin. */
+
 const NS = 'question'
 
 type QuestionListener = TypertClientEventListener<'user-questions/request'>
@@ -52,33 +53,33 @@ type ClientQuestionRequest = Parameters<QuestionListener>[0]
 type ClientQuestionNext = Parameters<QuestionListener>[1]
 type ClientQuestionAnswer = Awaited<ReturnType<QuestionListener>>
 
-/** Required services: Agent scopes, Remote Events, Session UI, Slot registry, conversation nodes, and copy. */
+
 export const inject = ['sessions', 'remote', 'remote.userQuestions', 'uiSession', 'slots', 'locale', 'uiConversation']
 
-/** One card and the composer seat it moves in and out of. */
+
 interface QuestionCard {
   readonly pending: PendingQuestion
-  /** Withdraw the panel from the composer seat; the request and its countdown stand. */
+
   readonly hide: () => void
-  /** Publish the panel last, so it wins the seat against any other pending question. */
+
   readonly reveal: () => void
-  /** Drop the card for good: the projection no longer lists its call. */
+
   readonly remove: () => void
-  /** Track forwarded requests through claim opening and waterfall settlement. */
+
   readonly trackRequest: (completion: Promise<void>) => () => void
-  /** Whether the forwarded request is still opening or waiting for settlement. */
+
   readonly hasRequest: () => boolean
 }
 
-/**
- * Cards published to the Session pending-interaction registry, keyed by
- * `PendingQuestion.key`. A tool-call-keyed card is shared by the forwarded
- * waterfall and the Session projection.
- *
- * A card outlives its seat. Closing the panel only unpublishes it, which keeps
- * the request answerable from its tool call row, so this registry — not the
- * pending-interaction registry — decides when a request is over.
- */
+
+
+
+
+
+
+
+
+
 class QuestionCards {
   readonly #cards = new Map<string, QuestionCard>()
 
@@ -88,7 +89,7 @@ class QuestionCards {
     return this.#cards.get(PendingQuestion.keyOf(sessionId, callId))
   }
 
-  /** Observable state for one card while the registry owns it. */
+
   source(key: string): PendingQuestion | undefined {
     return this.#cards.get(key)?.pending
   }
@@ -97,15 +98,15 @@ class QuestionCards {
     return [...this.#cards.values()]
   }
 
-  /** Keys of every card registered for one Session. */
+
   keysFor(sessionId: SessionId): readonly string[] {
     return this.values().filter(card => card.pending.sessionId === sessionId).map(card => card.pending.key)
   }
 
-  /**
-   * Return the card of a tool call, creating and publishing it when absent.
-   * A request without a call id always gets a fresh card.
-   */
+
+
+
+
   ensure(sessionId: SessionId, questions: readonly AskUserQuestionItem[], callId: ToolCallId | undefined): QuestionCard {
     if (callId !== undefined) {
       const existing = this.byCallId(sessionId, callId)
@@ -114,15 +115,15 @@ class QuestionCards {
     return this.#create(new PendingQuestion(sessionId, questions, callId, () => this.keysFor(sessionId)))
   }
 
-  /** Publish one carrier into the composer seat and register the card that owns it. */
+
   #create(pending: PendingQuestion): QuestionCard {
     const requests = new Set<Promise<void>>()
     const delegate = async (): Promise<void> => {
       pending.delegate()
       await Promise.all(requests)
     }
-    // Republishing is how a revealed card reaches the seat: the registry keeps
-    // the last entry of equal precedence, and it rejects a duplicate key.
+
+
     let unpublish: (() => void) | undefined = this.publish(pending, delegate)
     const card: QuestionCard = {
       pending,
@@ -148,20 +149,20 @@ class QuestionCards {
       },
       hasRequest: () => requests.size > 0,
     }
-    // A review card has no request left to park: closing it drops the card, and
-    // the tool call row builds another one from the same transcript record.
+
+
     pending.attachSeat({ hide: pending.review === undefined ? card.hide : card.remove })
     this.#cards.set(pending.key, card)
     return card
   }
 
-  /**
-   * Show the panel of one answerable tool call.
-   * @param sessionId - Session the tool call belongs to.
-   * @param callId - `ask_user_question` call whose panel to show, as its
-   * transcript row spells it.
-   * @returns whether a card for that call is still answerable.
-   */
+
+
+
+
+
+
+
   reveal(sessionId: SessionId, callId: string): boolean {
     const card = this.byCallId(sessionId, callId)
     if (card === undefined) return false
@@ -169,16 +170,16 @@ class QuestionCards {
     return true
   }
 
-  /**
-   * Show one settled tool call's recorded answers as a read-only card. A call
-   * that somehow still holds a card is shown as it stands, so a live request is
-   * never replaced by a stale copy of itself.
-   * @param sessionId - Session the tool call belongs to.
-   * @param callId - `ask_user_question` call whose record to show, as its
-   * transcript row spells it.
-   * @param record - the call's questions and recorded answers.
-   * @returns true; a record always produces a card.
-   */
+
+
+
+
+
+
+
+
+
+
   review(sessionId: SessionId, callId: string, record: UserQuestionRecord): boolean {
     const card = this.byCallId(sessionId, callId) ?? this.#create(new PendingQuestion(
       sessionId,
@@ -191,11 +192,11 @@ class QuestionCards {
     return true
   }
 
-  /**
-   * Hand every live waterfall back at plugin teardown. The pending-interaction
-   * registry only drains what it currently holds, and a hidden card is not in
-   * it, so its Host request would wait for its own abort instead.
-   */
+
+
+
+
+
   dispose(): void {
     for (const card of this.values()) {
       card.pending.delegate()
@@ -204,7 +205,7 @@ class QuestionCards {
   }
 }
 
-/** Present one forwarded request through its card until the waterfall settles. */
+
 async function answerQuestion(
   ctx: ClientContext,
   owner: ClientContext,
@@ -244,8 +245,8 @@ async function answerQuestion(
       claimSignal,
       (channel) => { card.pending.detachWaterfall(channel) },
     )
-    // Cancellation may win between the first claim frame and this continuation.
-    // The request has already settled, so its channel must never reach the card.
+
+
     if (claimSignal.aborted) return await waterfall.result
     delegateRequest = () => { waterfall.channel.delegate() }
     card.pending.attachWaterfall(waterfall.channel)
@@ -268,21 +269,21 @@ async function answerQuestion(
     if (releaseClaim === undefined) claimLifetime.abort()
     else if (claimEnded === undefined) await releaseClaim()
     else {
-      // The Host closes the claim after accepting the waterfall outcome.
-      // A local return precedes transmission and cannot release that claim.
+
+
       void Promise.allSettled([claimEnded]).then(() => { void releaseClaim() })
     }
-    // A blocking request without a call id is not in the projection; its card ends with its waterfall.
+
     if (callId === undefined) card.remove()
     completed.resolve()
     finishRequest()
   }
 }
 
-/**
- * Mirror answerable calls onto cards. A submitted reply in the durable Inbox
- * removes the editable card until the reply is admitted or discarded.
- */
+
+
+
+
 function publishContinuedQuestions(ctx: ClientContext, cards: QuestionCards): () => void {
   const sessions = ctx.sessions
   const stopProjections = new Map<SessionId, () => void>()
@@ -339,7 +340,7 @@ function publishContinuedQuestions(ctx: ClientContext, cards: QuestionCards): ()
       cards.byCallId(sessionId, row.callId)?.pending.setState('open')
     }
     for (const card of cards.values()) {
-      // A review card's call already settled, so the projection no longer lists it as answerable.
+
       if (card.pending.callId === undefined
         || card.pending.review !== undefined
         || rows.has(card.pending.key)
@@ -358,13 +359,13 @@ function publishContinuedQuestions(ctx: ClientContext, cards: QuestionCards): ()
   }
 }
 
-/**
- * Client plugin body: register the `question` dictionaries, the question
- * composer into the composer chain, and the late-reply conversation node.
- * Zero business face — data and verbs live on the matched carrier; t rides
- * the standard locale seat.
- * @param ctx - client root context.
- */
+
+
+
+
+
+
+
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-user-questions: dictionaries')
   const questionDraftStore = createQuestionDraftStore()
@@ -399,6 +400,7 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
   }, QuestionReplyView))
   ctx.remote.$on('user-questions/request', function (request, next) {
+    if (ctx.sessions.surface === 'overlay') return next()
     return answerQuestion(ctx, this, request, next, cards)
   })
 }

@@ -108,7 +108,7 @@ describe('Session model selection', () => {
     const restoredModel = new AgentModel(() => projection.stateOf(restored), restored, {})
     expect(restoredModel.current()).toEqual(selected)
     h.header(selected)
-    expect(h.state()).toEqual({ lastUsed: selected, pending: null })
+    expect(h.state()).toEqual({ selected, lastUsed: selected, pending: null })
     expect(h.current()).toEqual(selected)
     const state = h.state()
     h.header(selected)
@@ -120,11 +120,12 @@ describe('Session model selection', () => {
     const selected = { provider: 'beta', model: 'b1' }
     h.record(selected)
     h.header({ ...selected, reasoningEffort: ReasoningEffortId('high') }, { reasoningEffort: true })
-    expect(h.state()).toEqual({ lastUsed: selected, pending: null })
+    expect(h.state()).toEqual({ selected, lastUsed: selected, pending: null })
     expect(h.current()).toEqual(selected)
     expect(h.ctx.sessionProjections.snapshot(h.session).values.modelSelection).toEqual({ lastUsed: selected, next: selected })
     h.header({ ...selected, reasoningEffort: ReasoningEffortId('low') })
-    expect(h.current()).toEqual({ ...selected, reasoningEffort: 'low' })
+    expect(h.current()).toEqual(selected)
+    expect(h.state().lastUsed).toEqual({ ...selected, reasoningEffort: 'low' })
   })
 
   it('reuses fold state for duplicate recorded selections and unrelated events', async () => {

@@ -30,7 +30,7 @@ import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelsValidationFailure } from './DeepSeekModelsEditor.tsx'
-import { apiKeyFailure } from './apiKey.ts'
+import { apiKeyFailure, deepSeekKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import { validateReasoningEfforts } from './ModelReasoningEfforts.tsx'
@@ -102,6 +102,8 @@ export interface ProviderEditorProps {
   onClose: (changed: boolean) => void
   /** Called on a credential form submission before the save starts. */
   onSubmitCredential?: () => void
+  /** 写入前检查新密钥；失败时保留输入和原凭据。 */
+  checkCredential?: (value: string) => Promise<string | undefined>
   /**
    * Called once per change with whether the apply or the model list's
    * endpoint interrogation is in flight, so the owner can hold its surface
@@ -185,6 +187,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { onBusyChange } = props
   useEffect(() => { onBusyChange?.(busy || listBusy) }, [busy, listBusy, onBusyChange])
   const [failure, setFailure] = useState<string | undefined>(undefined)
+  const [keyVerified, setKeyVerified] = useState(false)
   // A settings success advances both retry baselines immediately. Keeping the
   // derived fields in the draft prevents a pushed namespace refresh from
   // turning them into deletions when the following credential write is retried.
@@ -212,6 +215,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     return typeof value === 'string' && value.trim().length > 0 ? value : undefined
   }
   const setField = (key: string, next: string | undefined): void => {
+    if (key === 'baseURL') setKeyVerified(false)
     // A value of nothing but whitespace is cleared, not stored: `stringAt`
     // already reports it as absent, so the field would otherwise render empty
     // while the draft still carried the spaces into `cordis.patch.yml`, where
@@ -224,18 +228,17 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
 
   // The model list is validated by the same per-row checker for both families,
   // so a bad row is named by its position rather than by a blanket message.
-  // Only a hand-declared pi-ai route's rows edit reasoning levels — the one
-  // model list with no installed catalog behind it — so only there are the
-  // levels read and the declarations checked.
+  // 保留已有思考能力声明的校验，模型设置不再提供档位编辑入口。
   const reasoningLevels = useMemo(
-    () => layout === 'pi-ai' && props.declared === true ? reasoningLevelChoices(namespace, schema) : [],
-    [layout, props.declared, namespace, schema],
+    () => layout === 'pi-ai' ? reasoningLevelChoices(namespace, schema) : [],
+    [layout, namespace, schema],
   )
   const editsReasoning = reasoningLevels.length > 0
   const validateModels = (value: unknown): DeepSeekModelsValidationFailure | ReasoningEffortsFailure | undefined =>
     validateDeepSeekModels(value) ?? (editsReasoning ? validateReasoningEfforts(value) : undefined)
   const modelFailure = validateModels(schema.getPath(draft, ['models']))
-  const keyFailure = apiKeyFailure(keyDraft)
+  // 官方 Provider 只接受开放平台 sk- 密钥；登录令牌粘贴进来会在保存前就被拦下，而不是启动时报 401。
+  const keyFailure = apiKeyFailure(keyDraft) ?? (layout === 'deepseek' ? deepSeekKeyFailure(keyDraft) : undefined)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
   // as "no key supplied" rather than as a key — that is how a card whose
@@ -266,6 +269,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
    * outside the card. Ops name only the fields this card can see.
    */
   const applyOnce = async (): Promise<string | undefined> => {
+    if (keyValue.length > 0 && (props.checkCredential !== undefined || layout === 'deepseek')) {
+      const failure = props.checkCredential !== undefined
+        ? await props.checkCredential(keyValue)
+        : await verifyOfficialKey(keyValue)
+      if (failure !== undefined) return failure
+    }
     const ns = namespace.ns
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
@@ -313,6 +322,32 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     return undefined
   }
 
+  // 使用表单中的地址和新密钥验证，拒绝时不覆盖仍在使用的凭据。
+  const verifyOfficialKey = async (apiKey?: string): Promise<string | undefined> => {
+    const result = await operations.discoverModels(namespace.ns, {
+      provider: props.provider,
+      ...probeBaseURL === undefined ? {} : { baseURL: probeBaseURL },
+      ...apiKey === undefined ? {} : { apiKey },
+    })
+    if (result.kind === 'found') return undefined
+    if (result.code === 'AUTH' || result.code === 'INVALID_CREDENTIAL') return t('keyRejected')
+    if (result.code === 'TRANSPORT' || result.code === 'TIMEOUT') return t('keyCheckFailed')
+    return result.message
+  }
+
+  const verify = async (): Promise<void> => {
+    setBusy(true)
+    setFailure(undefined)
+    setKeyVerified(false)
+    try {
+      const problem = await verifyOfficialKey(keyValue || undefined)
+      setFailure(problem)
+      setKeyVerified(problem === undefined)
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : t('keyCheckFailed'))
+    } finally { setBusy(false) }
+  }
+
   const apply = async (): Promise<void> => {
     setBusy(true)
     setFailure(undefined)
@@ -323,6 +358,8 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         return
       }
       props.onClose(true)
+    } catch (error) {
+      setFailure(error instanceof Error ? error.message : t('keyCheckFailed'))
     } finally {
       setBusy(false)
     }
@@ -432,8 +469,15 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               required={props.credentialRequired === true}
               autoFocus={props.autoFocusCredential === true}
               disabled={disabled}
-              onChange={(event) => { setKeyDraft(event.target.value) }}
+              onChange={(event) => { setKeyDraft(event.target.value); setKeyVerified(false) }}
             />
+            {family === 'deepseek' && props.credentialOnly !== true
+              ? <>
+                <p className={styles['advancedHint']}>{t('keyManagedHint')}</p>
+                <button type="button" className={styles['linkButton']} disabled={busy || shownKeyFailure !== undefined} onClick={() => { void verify() }}>{t('keyVerify')}</button>
+                {keyVerified ? <p role="status" className={styles['savedNotice']}>{t('keyVerified')}</p> : null}
+              </>
+              : null}
             {credentialHint === undefined ? null : <p id={`${props.provider}-credential-hint`} className={styles[missingRefs ? 'notice' : detectedRef === undefined ? 'advancedHint' : 'savedNotice']}>{credentialHint}</p>}
             {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
           </div>}
@@ -528,7 +572,6 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 <ModelListEditor
                   {...catalogProps}
                   catalogProvider={props.declared === true ? undefined : props.provider}
-                  reasoningLevels={reasoningLevels}
                   defaultInput={Array.isArray(defaultInput) ? defaultInput : undefined}
                   probe={probe}
                   probeBlocked={keyFailure}

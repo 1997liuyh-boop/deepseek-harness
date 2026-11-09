@@ -11,6 +11,7 @@ import {
 import type { CatalogRefusal, DeepSeekCatalogModel, ListingView, ModelListing } from '@deepseek-ai/dsh-llm-deepseek'
 import { Config, plainOptions, resolveAdapterOptions } from './config.ts'
 import type { ResolvedDeepSeekOptions } from './config.ts'
+import { discoverKeyModels } from './discovery.ts'
 
 export { Config, plainOptions, resolveAdapterOptions } from './config.ts'
 export type { Options, ResolvedDeepSeekOptions } from './config.ts'
@@ -44,6 +45,14 @@ export function apply(ctx: Context, config: Config): void {
       'MISSING_CREDENTIAL',
     )
   }
+  const lifetime = new AbortController()
+  ctx.effect(() => () => { lifetime.abort() }, 'llm-deepseek: 模型查询生命周期')
+  ctx.llm.registerModelDiscovery(ctx.fiber.entry?.options.id ?? name, async (request, signal) => {
+    const connection = options()
+    const key = request.apiKey ?? await resolveApiKey(connection)
+    return discoverKeyModels(request.baseURL ?? connection.baseURL, key,
+      AbortSignal.any([lifetime.signal, AbortSignal.timeout(connection.discoveryTimeoutMs), ...signal === undefined ? [] : [signal]]))
+  })
   /** The API key, or `undefined` when none is configured; other credential failures propagate. */
   const presentApiKey = async (connection: ResolvedDeepSeekOptions): Promise<string | undefined> => {
     try { return await resolveApiKey(connection) }

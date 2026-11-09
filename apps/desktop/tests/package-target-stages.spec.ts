@@ -7,6 +7,7 @@ import { withMacOSNotarizationProxy } from '../scripts/macos-notarization-proxy.
 import { packageMacOSArtifacts } from '../scripts/package-macos.ts'
 import { withWindowsSigningStage } from '../scripts/windows-signing-stage.mjs'
 import { prepareWindowsSignatureCacheDirectory } from '../scripts/windows-signature-cache-directory.mjs'
+import { loadDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
 
 vi.mock('../scripts/macos-notarization-proxy.ts', () => ({
   withMacOSNotarizationProxy: vi.fn(async (_proxy: string | undefined, action: () => Promise<void>) => action()),
@@ -205,6 +206,24 @@ it.each(['--unsigned', '--prepare-only'])('keeps %s hardware-free and creates no
   for (const call of run.run.mock.calls) expect(call[3].env).not.toHaveProperty('DSH_DESKTOP_WINDOWS_TOKEN_PIN')
   expect(writeFileSync).not.toHaveBeenCalled()
   expect(stages.includes('exec tsx scripts/smoke-packaged-runtime.ts --unsigned')).toBe(mode === '--unsigned')
+})
+
+it('retains build, preparation, and packaged runtime smoke for local unsigned Windows installers', async () => {
+  const { run, stages } = supervisor()
+  const local = loadDesktopPackageEnvironment('win32', environment, 'missing-settings', { unsigned: true, local: true })
+  await packageTarget(parseDesktopPackageInvocation(['win-x64', '--unsigned', '--local'], 'win32', 'x64'), local, run)
+  expect(stages).toEqual(expect.arrayContaining([
+    'run build --profile local', 'run prepare:runtime', 'run prepare:packages', 'run prepare:dsh',
+    'exec electron-builder --config electron-builder.config.mjs --win --x64 --publish never',
+    'exec tsx scripts/smoke-packaged-runtime.ts --unsigned',
+  ]))
+  for (const call of run.run.mock.calls) {
+    expect(call[3].env).toHaveProperty('DSH_DESKTOP_LOCAL_UNSIGNED', '1')
+    expect(call[3].env).not.toHaveProperty('DSH_DESKTOP_AUTO_UPDATE_ENV')
+    expect(call[3].env).not.toHaveProperty('DSH_DESKTOP_WINDOWS_TOKEN_PIN')
+  }
+  expect(withWindowsSigningStage).not.toHaveBeenCalled()
+  expect(writeFileSync).not.toHaveBeenCalled()
 })
 
 it.each(['mac-arm64', 'mac-x64', 'win-x64'] as const)('selects branding from the signing mode for %s', async (target) => {

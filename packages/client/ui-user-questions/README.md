@@ -67,6 +67,8 @@ The settled bubble is fully visible and has no disclosure control. Question and 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
+The injected `sessions.surface` identifies the floating-ball document, where this plugin delegates requests with `next()` so the Desktop shell owns the answer card.
+
 The package is one ownership rule: rendering a question is a host UI capability, having the tool is an agent capability, so the `tool-ask-user` row belongs to the presets that want it (and to the TUI composition, which has no presets).
 
 ### Reopening a panel

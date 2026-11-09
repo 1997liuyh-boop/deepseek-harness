@@ -25,6 +25,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+携带 `refreshPrompt: true` 的恢复动作会为下一真实模型重新组装提示词并执行步骤准备，不重新领取收件箱输入，也不重复已完成工具。模型准备失败也进入请求恢复，普通重试继续保留原提示词快照。
+
 在任何应运行 agent 的组合中挂载 `dsh-agent-loop`。它提供 `ctx.agents` 背后的驱动器，并启动你在配置中声明的 agent；[`dsh-base`](../../bundle/base/README.zh.md) 与 [`dsh-sdk-minimal`](../../bundle/sdk-minimal/README.zh.md) 都将它作为显式配置行挂载。
 
 ### 配置声明式 agent

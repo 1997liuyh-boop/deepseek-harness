@@ -329,6 +329,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'llm/model-discovery-rejected': {
       readonly settingsNs: string
       readonly baseURL?: string
+      /** 供应商无关的失败码，供界面区分凭据、网络和服务错误。 */
+      readonly failureCode?: string
     }
   }
 }

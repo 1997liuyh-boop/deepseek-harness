@@ -1,3 +1,4 @@
+import './fixtures/orb-startup-mocks.ts'
 import { parsePluginOperationRecord } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 import type { DesktopHostProcess } from '../src/host-process.ts'
 import type { AccountView } from '@deepseek-ai/dsh-deepseek-account/types'
@@ -23,7 +24,7 @@ const fileDrag = vi.hoisted(() => ({ dispose: vi.fn<() => Promise<void>>(), inst
 vi.mock('../src/file-drag.ts', () => ({ installDesktopFileDrag: () => { fileDrag.install(); return fileDrag.dispose } }))
 
 vi.mock('../src/web-document.ts', () => ({
-  authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), forwardWebRequest: vi.fn(),
+  authenticateWebHost: async () => 'test-cookie', serveWebDocument: vi.fn(), serveOverlayDocument: vi.fn(), forwardWebRequest: vi.fn(),
   removeLegacyHostCookies: harness.removeLegacyHostCookies,
 }))
 vi.mock('../src/operation-report-job.ts', () => ({ runOperationReportJob: vi.fn(async () => ({ appended: false, timedOut: false, cancelled: false })) }))
@@ -153,6 +154,8 @@ const harness = await vi.hoisted(async () => {
     }
   }
   class FakeHost {
+    readonly sendOrb = vi.fn()
+    readonly sendOrbCodeAgentModel = vi.fn()
     readonly updateTasks = vi.fn(async (_action: 'inspect' | 'lock' | 'unlock') => false)
     readonly inspectQuit = vi.fn(async () => ({ activeTasks: false, scheduledTasks: false }))
     url = 'http://127.0.0.1:3080/?token=test'
@@ -172,7 +175,9 @@ const harness = await vi.hoisted(async () => {
       readonly primaryRuntime?: string,
       readonly packageManager?: { pnpm: string; nodeBin: string },
       readonly onPlatformSession?: ConstructorParameters<typeof DesktopHostProcess>[8],
-      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[9],
+      readonly orb?: ConstructorParameters<typeof DesktopHostProcess>[9],
+      readonly platformFetch?: ConstructorParameters<typeof DesktopHostProcess>[10],
+      readonly onPluginOperation?: ConstructorParameters<typeof DesktopHostProcess>[11],
     ) { hosts.push(this) }
   }
   const app = Object.assign(new EventEmitter(), {
@@ -305,6 +310,8 @@ vi.mock('../src/policy-test-auth.ts', () => ({ DesktopPolicyTestAuth: class {
 } }))
 
 vi.mock('electron', () => ({
+  screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }) },
+  systemPreferences: { getMediaAccessStatus: () => 'granted', isTrustedAccessibilityClient: () => true },
   app: harness.app,
   BrowserWindow: harness.FakeWindow,
   WebContentsView: harness.FakeView,
@@ -321,7 +328,7 @@ vi.mock('electron', () => ({
   },
   Menu: { setApplicationMenu: harness.menu.setApplicationMenu, buildFromTemplate: harness.menu },
   session: { defaultSession: {
-    on: vi.fn(), cookies: harness.hostCookies,
+    on: vi.fn(), setDisplayMediaRequestHandler: vi.fn(), cookies: harness.hostCookies,
     setPermissionCheckHandler: vi.fn(), setPermissionRequestHandler: vi.fn(), webRequest: { onBeforeSendHeaders: harness.socketHeaders },
   } },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: harness.protocolHandle },

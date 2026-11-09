@@ -1,0 +1,79 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/computer-use/tool-computer-use/README.md
+/:
+  en: ab9264fc41ed4069
+  zh: 03a1117f544016a3
+/deepseek-ai-dsh-tool-computer-use:
+  en: 7ee5697dd49984a4
+  zh: 84f0fced4d21995f
+/deepseek-ai-dsh-tool-computer-use/summary:
+  en: dbdce4ac71100d83
+  zh: a16f3540261a858a
+/deepseek-ai-dsh-tool-computer-use/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-tool-computer-use/use-this-package:
+  en: f67703d154bd4748
+  zh: c67d081bc33eee4e
+/deepseek-ai-dsh-tool-computer-use/use-this-package/when-to-choose-it:
+  en: ba1df723b1966a5f
+  zh: 302b7aadd4d455b5
+/deepseek-ai-dsh-tool-computer-use/use-this-package/minimal-configuration:
+  en: 6e533c5b434cb217
+  zh: 08c9921ba81119b7
+/deepseek-ai-dsh-tool-computer-use/use-this-package/the-tools:
+  en: c6a83560dba25452
+  zh: c4a401dd34cd0399
+/deepseek-ai-dsh-tool-computer-use/understand-the-implementation:
+  en: cd233dcdc9d17a1c
+  zh: 433e1cb6daa2bd17
+/deepseek-ai-dsh-tool-computer-use/understand-the-implementation/design-philosophy:
+  en: bf1c1900f726f361
+  zh: c7d0743853d4de10
+/deepseek-ai-dsh-tool-computer-use/understand-the-implementation/source-map:
+  en: ddc54075efbe9da1
+  zh: b56dd79cbc2b8bba
+/deepseek-ai-dsh-tool-computer-use/further-exploration:
+  en: 1601674a4b009260
+  zh: 853ee1b762cf8268
+/deepseek-ai-dsh-tool-computer-use/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-computer-use/model-experience/system-prompt:
+  en: cf78b9dd5596495f
+  zh: bd44560f8c2435e8
+/deepseek-ai-dsh-tool-computer-use/model-experience/system-prompt/what-the-model-sees:
+  en: a2c60c2e4aff19f0
+  zh: 5d1bfcbc19d1bcb4
+/deepseek-ai-dsh-tool-computer-use/model-experience/system-prompt/what-the-model-sees/computer-use-policy:
+  en: 05a58de620d02f4d
+  zh: 05a58de620d02f4d
+/deepseek-ai-dsh-tool-computer-use/model-experience/system-prompt/what-the-model-sees/windows-unfocused-window:
+  en: ed8fa1f88e108404
+  zh: 1ba3051660afe57b
+/deepseek-ai-dsh-tool-computer-use/model-experience/system-prompt/token-effect:
+  en: e2cf88158df47741
+  zh: cc4bce54ed05dfe2
+/deepseek-ai-dsh-tool-computer-use/model-experience/system-prompt/kv-cache-effect:
+  en: 1a0d2e4e621badc6
+  zh: 587edc81db51398e
+/deepseek-ai-dsh-tool-computer-use/model-experience/tool-schemas:
+  en: 3039bc5e7a796b21
+  zh: 6b7a9eaf69c9ea53
+/deepseek-ai-dsh-tool-computer-use/model-experience/tool-schemas/what-the-model-sees:
+  en: 9e9072f234d1ba95
+  zh: 7e2fcbe33a765c64
+/deepseek-ai-dsh-tool-computer-use/model-experience/tool-schemas/token-effect:
+  en: 68517f7d65ef7e9d
+  zh: 25fe69b8c28bdccf
+/deepseek-ai-dsh-tool-computer-use/model-experience/tool-schemas/kv-cache-effect:
+  en: f49063700eef9924
+  zh: 2e0fa4942e5e817c
+/deepseek-ai-dsh-tool-computer-use/known-limitations-and-deferred-work:
+  en: 44cfa8776ea74be2
+  zh: 95d26287c031ecf7
+/deepseek-ai-dsh-tool-computer-use/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

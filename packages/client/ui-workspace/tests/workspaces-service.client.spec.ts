@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type {
   ISessions, SessionListState, SessionReference, SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import { SessionCreateError } from '@deepseek-ai/dsh-api-session-controller/client'
+import {
+  OVERLAY_READY_MESSAGE_TYPE, OVERLAY_SHELL_ORIGIN, OVERLAY_THEME_MESSAGE_TYPE,
+  overlaySessionId, overlaySessionMessage, SessionCreateError,
+} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type {
   IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
@@ -136,6 +139,14 @@ interface RetainedSession {
 }
 
 class FakeSessions implements ISessions {
+  readonly surface: ISessions['surface'] = 'main'
+  readonly overlay: ISessions['overlay'] = {
+    shellOrigin: OVERLAY_SHELL_ORIGIN,
+    readyMessageType: OVERLAY_READY_MESSAGE_TYPE,
+    themeMessageType: OVERLAY_THEME_MESSAGE_TYPE,
+    sessionId: overlaySessionId,
+    sessionMessage: overlaySessionMessage,
+  }
   readonly list: MutableSource<SessionListState>
   readonly create: ReturnType<typeof vi.fn<ISessions['create']>>
   readonly fork = vi.fn<ISessions['fork']>(async () => sid('forked'))

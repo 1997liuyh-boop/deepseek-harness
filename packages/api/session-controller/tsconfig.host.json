@@ -130,6 +130,12 @@
     },
     {
       "path": "../../util/brand"
+    },
+    {
+      "path": "../../session/session-library"
+    },
+    {
+      "path": "../../llm/llm-routing"
     }
   ]
 }

@@ -33,6 +33,11 @@ import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import WorkingDirectory from '@deepseek-ai/dsh-working-directory'
 import * as ToolWorkingDirectory from '@deepseek-ai/dsh-tool-working-directory'
 import * as ToolWorktree from '@deepseek-ai/dsh-experimental-tool-worktree'
+import {
+  applyComputerUse,
+  createFakeDesktopBackend,
+  resolveComputerUseConfig,
+} from '@deepseek-ai/dsh-tool-computer-use'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
@@ -204,6 +209,19 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-tool-computer-use',
+    dir: 'tool-computer-use',
+    source: 'packages/computer-use/tool-computer-use/src/plugin.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.attachments', 'ctx.sessionProjections'],
+    writes: ['tool/call', 'tool/result', 'computer-use/coordinate-mode', 'image attachments'],
+    async mount(ctx) {
+      // 只读取工具声明，测试后端不发送真实桌面输入或捕获屏幕。
+      await ctx.plugin(CatalogAttachmentStore)
+      applyComputerUse(ctx, createFakeDesktopBackend(), resolveComputerUseConfig())
+    },
+    note: 'The default plugin registers desktop observation and input tools. This catalog harvests their schemas with an inert desktop backend; no desktop action is executed. The optional code-agent plugin is a separate entry point.',
+  },
   {
     pkg: '@deepseek-ai/dsh-plugin-manager',
     dir: 'plugin-manager',

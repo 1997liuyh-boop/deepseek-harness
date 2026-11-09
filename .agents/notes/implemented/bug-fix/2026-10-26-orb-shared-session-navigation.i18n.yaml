@@ -1,0 +1,19 @@
+# Bilingual-pair consistency record for 2026-10-26-orb-shared-session-navigation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-10-26-orb-shared-session-navigation.md
+/agent-note-shared-session-navigation-for-the-desktop-orb:
+  en: f2d9e433eacfb167
+  zh: 7880c127b0afc56f
+/agent-note-shared-session-navigation-for-the-desktop-orb/problem:
+  en: 8872e0efe2b874f8
+  zh: 7af92fb40d68b991
+/agent-note-shared-session-navigation-for-the-desktop-orb/decision:
+  en: d89bd5839749242f
+  zh: 8e6744387eeb54b7
+/agent-note-shared-session-navigation-for-the-desktop-orb/alternatives-considered:
+  en: 81901c442f27e36a
+  zh: 382a3722a2a2b033
+/agent-note-shared-session-navigation-for-the-desktop-orb/consequences:
+  en: 7d920ff0b8e466b3
+  zh: ffb38cc1213e3659

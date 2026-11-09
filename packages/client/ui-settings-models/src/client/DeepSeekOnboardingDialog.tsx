@@ -105,6 +105,7 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
       return
     }
     void controller.load()
+    complete()
   }
 
   const editor = (
@@ -122,6 +123,13 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
           readOnly={false}
           hideTitle
           credentialOnly
+          checkCredential={async (value) => {
+            const result = await operations.discoverModels(namespace.ns, { provider: row.entry.provider, apiKey: value })
+            if (result.kind === 'found') return undefined
+            if (result.code === 'AUTH' || result.code === 'INVALID_CREDENTIAL') return t('keyRejected')
+            if (result.code === 'TRANSPORT' || result.code === 'TIMEOUT') return t('keyCheckFailed')
+            return result.message
+          }}
           onSubmitCredential={() => { props.track?.('api_key_save_click', {}) }}
           credentialRequired
           autoFocusCredential

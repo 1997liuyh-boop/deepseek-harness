@@ -18,6 +18,14 @@ import type { AccountAvatarSnapshot } from '../src/client/account-avatar.ts'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
+it.each([en, zh])('资料访问被拦截时保留账号卡片并显示验证说明', async (copy) => {
+  mount({ status: 'credential-stored', attempt: null }, copy, { profile: { status: 'failed', errorCode: 'access-blocked' } })
+  expect(screen.getByText(copy.signedIn)).toBeTruthy()
+  expect(screen.getByText(copy.accessBlocked)).toBeTruthy()
+  await expect(`${screen.getByRole('region', { name: copy.nav }).textContent}\n`)
+    .toMatchFileSnapshot(`./expected/profile-access-blocked-${copy === en ? 'en' : 'zh'}.txt`)
+})
+
 /** One resolved theme snapshot per scheme; the slot's theme hook serves these in the application. */
 const themeOf = (colorScheme: 'light' | 'dark'): ThemeSnapshot => ({
   preference: colorScheme, fontSizes: { text: 14, code: 11, terminal: 13 }, fontFamilies: { text: '', code: '', terminal: '' },

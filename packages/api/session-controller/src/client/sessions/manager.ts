@@ -14,7 +14,7 @@ import type {
 import { mergeOrderedBaseline } from '../ordered-baseline.ts'
 import { isRemoteFailure } from '@deepseek-ai/dsh-api-gateway/client'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { RemoteError, type RemoteFailure, type RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionListEntry, TitledSessionSummary } from './lineage.ts'
 import { flattenLineage } from './lineage.ts'
 // Type-only merge edge: the title domain's client-namespace outlet declares
@@ -26,6 +26,10 @@ import { ProjectionValueStore } from './projection-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
 import type { SessionTarget } from '../contract/sessions.ts'
+
+function staleLibraryResult(): RemoteResult<never> {
+  return { ok: false, error: new RemoteError('gateway/cancelled', 'History library changed; retry in the current account', {}) }
+}
 
 function sessionSeqCursor(value: number): SessionSeqCursor {
   return value === -1 ? -1 : SessionSeq(value)
@@ -99,6 +103,7 @@ export class SessionManager {
    */
   private readonly engagedSessions = new Set<SessionId>()
   private disposed = false
+  private libraryGeneration = 0
   /** Per-session projection value stores, retained independently of instance arrival (the
    *  title-snapshot precedent, generalized): push frames land here whether or not the Session
    *  is instantiated (list rows read the 'title' key), and an instantiated Session adopts the
@@ -495,6 +500,7 @@ export class SessionManager {
       agentPreset?: string
     } = {},
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
+    const generation = this.libraryGeneration
     const shared = {
       ...(opts.sessionId === undefined ? {} : { sessionId: opts.sessionId }),
       ...(opts.agentPreset === undefined ? {} : { agentPreset: opts.agentPreset }),
@@ -503,6 +509,7 @@ export class SessionManager {
       ? { workspaceId: opts.workspaceId, ...shared }
       : { ...(opts.cwd === undefined ? {} : { cwd: opts.cwd }), ...shared }
     const result = await this.remote.session.create(payload)
+    if (generation !== this.libraryGeneration) return staleLibraryResult()
     if (result.ok) {
       this.recordMutation({ kind: 'placeholder', summary: { agentAvailable: true,
         sessionId: result.value.sessionId, updatedAt: Date.now(), running: false, blank: true,
@@ -536,14 +543,17 @@ export class SessionManager {
    * @returns the fork result (the child session id).
    */
   async fork(
-    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean },
+    opts: { sessionId: SessionId; atSeq?: SessionSeq; allowMigration?: boolean; readableHistory?: boolean },
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
+    const generation = this.libraryGeneration
     const source = this.summaries.find(s => s.sessionId === opts.sessionId)
     const result = await this.remote.session.fork({
       sessionId: opts.sessionId,
       ...opts.atSeq === undefined ? {} : { atSeq: opts.atSeq },
       ...opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration },
+      ...opts.readableHistory === undefined ? {} : { readableHistory: opts.readableHistory },
     })
+    if (generation !== this.libraryGeneration) return staleLibraryResult()
     const childId = result.ok
       ? result.value.sessionId
       : workspaceAttachSessionId(result.error)
@@ -563,7 +573,9 @@ export class SessionManager {
    * @returns the accepted title and event position, or the Remote failure.
    */
   async rename(sessionId: SessionId, title: string): Promise<RemoteResult<SessionRenameValue>> {
+    const generation = this.libraryGeneration
     const result = await this.remote.session.rename({ sessionId, title })
+    if (generation !== this.libraryGeneration) return staleLibraryResult()
     if (result.ok) {
       this.projectionStore(sessionId).apply('title', result.value.title, SessionSeq(result.value.seq))
     }
@@ -748,6 +760,26 @@ export class SessionManager {
     this.projectionInflight.clear()
     this.projectionLoads.clear()
     for (const parentSessionId of parents) void this.refreshProjections(parentSessionId)
+  }
+
+  /** 归属变化后丢弃旧列表、查询和会话实例，旧响应不能写回。 */
+  handleLibraryChanged(): void {
+    this.libraryGeneration += 1
+    for (const session of this.sessions.values()) session.handleRemoved()
+    for (const { controller } of this.projectionInflight.values()) controller.abort()
+    this.projectionInflight.clear()
+    this.projectionLoads.clear()
+    this.projectionStores.clear()
+    this.addresses.clear()
+    this.engagedSessions.clear()
+    this.summaries = []
+    this.entryCache.clear()
+    this.itemsCache = []
+    this.listPhase = 'pending'
+    this.listMutations = null
+    this.listInflight = null
+    this.notifier.markDirty()
+    void this.refreshList()
   }
 
   private buildListSnapshot(): SessionListSnapshot {

@@ -93,13 +93,20 @@ export function ModelSelect(
   }
 
   const accountProviderName = t('provider.account')
+  const routingProviderName = t('provider.routing')
+  const systemRoutingName = t('routing.system')
+  const aggregateRoutingName = t('routing.aggregate')
   const groups = useMemo(() => orderModelProviders(state.groups).map(group => ({
     ...group,
+    models: group.id === 'dsh-routing' ? group.models.map(model => ({
+      ...model, name: model.id === 'aggregate' ? aggregateRoutingName : model.id === 'system' ? systemRoutingName : model.name,
+    })) : group.models,
     provider: {
       id: group.id,
-      name: group.id === 'deepseek-account' ? accountProviderName : group.name,
+      name: group.id === 'deepseek-account' ? accountProviderName : group.id === 'dsh-routing' ? routingProviderName : group.name,
     },
-  })), [state.groups, accountProviderName])
+  })), [state.groups, accountProviderName, routingProviderName, systemRoutingName, aggregateRoutingName])
+  const aggregateChoice = groups.find(group => group.id === 'dsh-routing')?.models.find(model => model.id === 'aggregate')
   const choices = useMemo(() => groups.flatMap(group =>
     group.models.map(model => ({
       group,
@@ -500,6 +507,16 @@ export function ModelSelect(
                   <span className={css.cellLabel}>{t('menu.effort')}</span>
                   <span className={css.cellValue}>{effortLabel}</span>
                   <IconChevronRightOutlineRegular className={css.cellChevron} />
+                </button>
+              )}
+              {aggregateChoice !== undefined && (
+                <button ref={itemRef()} type="button" role="menuitemradio"
+                  aria-checked={state.current?.provider === 'dsh-routing' && state.current.model === 'aggregate'}
+                  className={css.cell} disabled={busy} onClick={() => { choose({ provider: 'dsh-routing', model: 'aggregate' }) }}>
+                  <span className={css.cellLabel}>{t('routing.aggregate')}</span>
+                  <span className={css.check}>{pending?.provider === 'dsh-routing' && pending.model === 'aggregate'
+                    ? <StateDot state="ongoing" /> : state.current?.provider === 'dsh-routing' && state.current.model === 'aggregate'
+                      ? <IconCheckOutlineRegular /> : null}</span>
                 </button>
               )}
               {renderSlot('conversation.input.model.options', {

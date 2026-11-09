@@ -44,6 +44,8 @@ export async function buildModelCatalog(
           name: model.name,
           ...(model.description === undefined ? {} : { description: model.description }),
           ...(reasoning === undefined ? {} : { reasoning }),
+          // 设置页据此标出支持图片的候选，提醒聚合队列是否还有第二个图片模型。
+          ...(resolved.inputModalities === undefined ? {} : { inputModalities: [...resolved.inputModalities] }),
           ...(model.badge === undefined ? {} : { badge: model.badge }),
         }
       }))

@@ -34,6 +34,8 @@ Account consumers read stored login state, start or cancel a browser login, and 
 <a id="use-this-package"></a>
 ## Use this package
 
+`deepseek-account/platform-access` delegates same-origin account requests to a browser provider within the original deadline. Private `PlatformAccessRequest` and bounded `PlatformAccessResponse` messages stay between Host and Electron main; browser verification Cookies remain in Electron. Neither message enters account RPC, model requests or Session logs. `access-blocked` distinguishes an unfinished access challenge from expired authorization and may accompany a failed profile for actionable UI feedback.
+
 `AccountProfile.avatarUrl` is an optional profile image URL; null or absence means no avatar.
 
 Successful local sign-out emits `deepseek-account/signed-out`. The platform provider installs the account-owned cancellation listener, which checks running Agents against `session.requestContext().provider` and cancels account tasks while retaining inboxes. The account controller uses the same predicate for its confirmation dialog. No additional Agent state is maintained. Before a new turn binds its first request, this predicate still sees the previous turn’s provider.

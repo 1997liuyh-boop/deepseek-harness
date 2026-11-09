@@ -98,6 +98,12 @@ describe('sessionFormatVersionRefusal', () => {
 })
 
 describe('validateStoredEvents', () => {
+  it('恢复 Orb 已记录的坐标模式事件，同时保留原始事件内容', () => {
+    const event = { type: 'computer-use/coordinate-mode', seq: 0, time: 1, data: { mode: 'pixel' } } as SessionEvent
+    const restored = validateStoredEvents(meta('orb-coordinate'), [event])
+    expect(restored).toEqual([event])
+  })
+
   it('adopts and freezes the events in place, returning the same array', () => {
     const m = meta('adopted')
     const events = [

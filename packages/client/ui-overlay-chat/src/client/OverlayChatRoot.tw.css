@@ -1,0 +1,11 @@
+@reference "tailwindcss";
+
+:global(html), :global(body) { @apply m-0 h-full overflow-hidden; }
+:global(html) { @apply bg-transparent; }
+:global(body) { @apply bg-[var(--dsw-alias-bg-base)]; }
+:global(#root) { @apply h-full; }
+.shell {
+  @apply box-border h-full overflow-auto [--dsh-chat-content-width:100%] [--dsh-composer-side-clearance:0px];
+}
+.shell :global([data-chat-turn-rail]) { @apply hidden; }
+.inputOverlay { @apply size-0 overflow-visible; }

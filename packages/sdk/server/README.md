@@ -57,6 +57,8 @@ Creation and edit accept images as reference material before the next round; sho
 
 ### Wiring
 
+Created and resumed agents resolve the initialized model through `agent/resolve-model` before prompt assembly. A composed routing policy can select a fallback; request headers and SDK event notifications retain the real provider and model.
+
 The plugin creates one agent per `sessionId` on first use. A registered model adapter wins the route; an unowned `deepseek-official` route mounts the DeepSeek adapter, and any other unowned provider fails initialization. The selected adapter resolves the exact model and optional reasoning effort before initialization succeeds.
 
 ### Configuration

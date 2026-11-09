@@ -99,6 +99,14 @@
     - id: llm-retry
       name: '@deepseek-ai/dsh-llm-retry'
 
+    - id: llm-routing
+      name: '@deepseek-ai/dsh-llm-routing'
+
+    - id: session-library
+      name: '@deepseek-ai/dsh-session-library'
+      config:
+        root: !!js "dshHomePath('session-library')"
+
     # Live Config forms persist through the active profile patch.
 
     # Live configuration forms persist through the launcher's profile.

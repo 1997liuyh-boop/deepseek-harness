@@ -259,7 +259,9 @@ interface ModelSelection {
  * default again instead of pinning it as a choice.
  */
 interface ModelSelectionProjectionState {
-  /** Selection used by the latest recorded model request. */
+  /** 最近一次明确选择；备用请求不覆盖此项。 */
+  readonly selected: ModelSelection | null
+  /** 最近一次实际请求使用的模型。 */
   readonly lastUsed: ModelSelection | null
   /** Later recorded selection not yet used by a matching model request. */
   readonly pending: ModelSelection | null
@@ -399,10 +401,10 @@ type PreStepDecision =
 
 ```ts type-equiv
 /** Action returned by a listener that owns model-request recovery. */
-type RequestErrorAction = { kind: 'retry' } | undefined
+type RequestErrorAction = { kind: 'retry'; refreshPrompt?: true } | undefined
 ```
 
-`agent/pre-step` is the only waterfall listener chain before request derivation. `agent/turn-stopping` runs when a turn has no tool or steering continuation, before one final steering drain.
+Recovery may set `refreshPrompt: true` to repeat prompt assembly and pre-step preparation for a changed real model without reclaiming inbox input or repeating tools. `agent/resolve-model` resolves the real model before assembly. `agent/turn-stopping` runs when a turn has no tool or steering continuation, before one final steering drain.
 
 `agent/created` carries a `SessionStartSource` (why the session lifecycle began; a bridge keys its SessionStart matcher on it):
 
@@ -1051,7 +1053,7 @@ Handle one failed model-request attempt before the loop retries or closes its st
  * @param payload.step - the step containing the failed request attempt.
  * @param payload.provider - the provider selected for the failed request.
  * @param payload.failure - serializable facts normalized at the final adapter boundary.
- * @param payload.retryPolicy - the policy of the adapter registration that served the failed request.
+   * @param payload.retryPolicy - 请求所属适配器的重试策略；拥有重试的中间件可在委派前清空，保留专用恢复并禁用供应商重试。
  * @param payload.signal - the turn abort signal.
  * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
  * @mode waterfall
@@ -1062,6 +1064,29 @@ Handle one failed model-request attempt before the loop retries or closes its st
 Types: [LlmFailure](llm-streaming.md) · [ResolvedRetryPolicy](llm-streaming.md) · [Scoped](scope.md)
 
 Source: [`packages/core/agent/src/runtime-types.ts`](../../packages/core/agent/src/runtime-types.ts)
+
+<a id="agentresolve-model--waterfall"></a>
+
+#### `agent/resolve-model` — waterfall
+
+在提示词组装前解析真实模型；返回值同时用于提示词和请求。
+
+```ts cordis-catalog
+/**
+ * 在提示词组装前解析真实模型；返回值同时用于提示词和请求。
+ * @param payload.agent - 本次组装所属 Agent。
+ * @param payload.selected - 入口选择的模型。
+ * @param payload.signal - 当前轮次的取消信号。
+ * @param next - 下游选择。
+ * @returns 本次实际使用的模型。
+ * @mode waterfall
+ */
+'agent/resolve-model'(this: Scoped<Agent>, payload: { agent: Agent selected: ModelSelection | undefined signal: AbortSignal | undefined }, next: () => Promise<ModelSelection | undefined>): Promise<ModelSelection | undefined>
+```
+
+Types: [Scoped](scope.md)
+
+Source: [`packages/core/agent/src/model-selection.ts`](../../packages/core/agent/src/model-selection.ts)
 
 <a id="agentstatus--emit"></a>
 

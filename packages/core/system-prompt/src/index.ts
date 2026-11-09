@@ -671,7 +671,8 @@ export class SystemPrompt extends Service {
         if (section.complete === true) completeSection = { ...assembled }
         return assembled
       })
-    const tools = orderTools(collected, this.toolOrder, knownNames)
+    const schemas = await this.ctx.waterfall(scopeTarget(this, scope), 'system-prompt/tool-schemas', collected, context, () => Promise.resolve(collected))
+    const tools = orderTools(schemas, this.toolOrder, knownNames)
     const assembly: PromptPresentation = {
       sections,
       contexts: [...contextByName.values()]
@@ -696,3 +697,17 @@ export class SystemPrompt extends Service {
 }
 
 export default SystemPrompt
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * 在排序前调整已提供的工具说明与参数文本。
+     * @param schemas - 已收集的工具声明。
+     * @param context - 当前组装上下文。
+     * @param next - 下游声明处理。
+     * @returns 调整后的工具声明。
+     * @mode waterfall
+     */
+    'system-prompt/tool-schemas'(schemas: ToolSchema[], context: AssembleContext, next: () => Promise<ToolSchema[]>): Promise<ToolSchema[]>
+  }
+}

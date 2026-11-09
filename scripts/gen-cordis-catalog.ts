@@ -91,6 +91,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   credentials: 'credentials.md',
   credentialsController: 'credentials.md',
   settingsController: 'settings.md',
+  ccSwitchImport: 'settings.md',
   directoryPicker: 'workspace.md',
   deepseekLlmApiExtensions: 'llm-streaming.md',
   dynamicCordisRunner: 'extensions.md',
@@ -103,6 +104,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   webServer: 'web-server.md',
   webApp: 'web-server.md',
   llm: 'llm-streaming.md',
+  llmRouting: 'llm-streaming.md',
   lsp: 'lsp.md',
   messageFeedback: 'feedback.md',
   sessionFeedback: 'feedback.md',
@@ -127,6 +129,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   sessionSkillCatalog: 'skills.md',
   sessions: 'session.md',
   sessionLogDeepSeek: 'session.md',
+  sessionLibrary: 'session.md',
   settings: 'settings.md',
   sessionTitle: 'session-title.md',
   skills: 'skills.md',
@@ -180,6 +183,8 @@ export const SERVICE_PAGE: Record<string, string> = {
  * to a model as `cordis_runtime_inspect what:"client"`).
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
+  computerUseOverlayGuard: 'optional Host-provided interface for overlay exclusion, capture/input protection and observation frames; packages/computer-use/tool-computer-use/README.md and src/overlay-guard.ts own this internal integration',
+  computerUsePresetRoot: 'not a service: overlay locator provides the packaged agent-presets directory as a string; packages/computer-use/tool-computer-use/README.md and src/preset-root.ts own this boot value',
   contextMenus: 'client-side interface-typed menu registry — packages/client/ui-context-menu/README.md owns the API',
   fileActions: 'client-side interface-typed file actions — packages/client/ui-file-actions/README.md owns the API',
   invocation: 'not a service: per-call accessor (RemoteInvocation | undefined) the Gateway derives for each Remote call — packages/api/gateway/README.md owns the contract',
@@ -385,6 +390,11 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AgentFactory: 'core.md',
   AgentHandle: 'core.md',
   ModelSelection: 'core.md',
+  Route: 'llm-streaming.md',
+  RoutingPolicy: 'llm-streaming.md',
+  LibraryBackup: 'session.md',
+  LibraryState: 'session.md',
+  LibraryCandidate: 'session.md',
   AllowedModelRoute: 'subagent.md',
   SubagentModelSelectionSettings: 'subagent.md',
   AgentOptions: 'core.md',
@@ -867,6 +877,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   AccountBonusOrderId: 'credentials.md',
   AccountUserId: 'credentials.md',
   PlatformSession: 'credentials.md',
+  PlatformAccessRequest: 'credentials.md',
+  PlatformAccessResponse: 'credentials.md',
   SignInAttemptId: 'credentials.md',
   AuthorizationPrompt: 'credentials.md',
   AuthorizationRequest: 'credentials.md',
@@ -987,6 +999,11 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
 
 /** Project types deliberately documented outside the subsystems catalog. */
 export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
+  ImportScan: 'CC Switch redacted preview is local to the Models settings import flow; owned by packages/client/ui-settings-models/README.md#import-from-cc-switch and src/cc-switch-types.ts',
+  ImportCandidateId: 'CC Switch candidate identity is local to one Models settings import scan; owned by packages/client/ui-settings-models/README.md#import-from-cc-switch and src/cc-switch-types.ts',
+  ImportScanToken: 'CC Switch expiring Host scan token is local to the Models settings import flow; owned by packages/client/ui-settings-models/README.md#import-from-cc-switch and src/cc-switch-types.ts',
+  ImportResult: 'CC Switch per-provider commit result is local to the Models settings import flow; owned by packages/client/ui-settings-models/README.md#import-from-cc-switch and src/cc-switch-types.ts',
+  ImportSelection: 'CC Switch reviewed provider fields are local to the Models settings import flow; owned by packages/client/ui-settings-models/README.md#import-from-cc-switch and src/cc-switch-types.ts',
   ActionCardDecision: 'packages/experimental/action-cards/README.md',
   ActionCardKind: 'packages/experimental/action-cards/README.md',
   ActionCardResult: 'packages/experimental/action-cards/README.md',

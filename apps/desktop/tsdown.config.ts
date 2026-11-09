@@ -1,35 +1,39 @@
+import { execFileSync } from 'node:child_process'
 import { defineConfig } from 'tsdown'
 import { build } from 'vite'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
+import postcss from 'postcss'
+import tailwind from '@tailwindcss/postcss'
 import { repositoryClientBuildEnvironment, resolveClientBuildEnvironment } from '../../scripts/client-build-environment.ts'
 import { packagedImportsPlugin } from './scripts/desktop-bundle-imports.mjs'
 
-// This config runs after the workspace tsdown pass, not inside it: the main bundle inlines
-// workspace devDependencies from their lib/ output, which the concurrent workspace pass does
-// not order ahead of this package (root package.json build:lib:host).
+
+
+
 const manifest = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   dependencies: Record<string, string>
 }
-/** electron-builder ships the manifest `dependencies` next to the main bundle; Electron provides `electron` and Node. */
+
 const mainProcessImports = { packages: new Set(['electron', ...Object.keys(manifest.dependencies)]), nodeBuiltins: true }
-/**
- * The `require` polyfill of a sandboxed preload resolves only these modules
- * (Electron: Process Sandboxing, "Preload scripts").
- */
+
+
+
+
 const preloadImports = { packages: new Set(['electron', 'events', 'timers', 'url']), nodeBuiltins: false }
 
 const REPOSITORY_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
-/** Use the client environment this build already received, otherwise the repository's own version and commit. */
+
 const clientEnvironment = resolveClientBuildEnvironment(process.env.DSH_CLIENT_VERSION === undefined
   ? repositoryClientBuildEnvironment(REPOSITORY_ROOT, process.env)
   : process.env)
 const clientVersion = clientEnvironment.DSH_CLIENT_VERSION
 if (clientVersion === undefined) throw new Error('desktop build: the client environment carries no DSH_CLIENT_VERSION')
 
-/** Inline the one public build value the Node entry reads; every other variable stays a runtime lookup. */
+
 const clientVersionDefine = { 'process.env.DSH_CLIENT_VERSION': JSON.stringify(clientVersion) }
 
 export default defineConfig([
@@ -57,6 +61,31 @@ export default defineConfig([
     plugins: [packagedImportsPlugin(mainProcessImports)],
     define: clientVersionDefine,
     onSuccess: async () => {
+      const mentionsStyle = fileURLToPath(new URL('./renderer/floating-mentions.tw.css', import.meta.url))
+      const mentionsCss = await postcss([tailwind()]).process(await readFile(mentionsStyle, 'utf8'), { from: mentionsStyle })
+      await writeFile(new URL('./renderer/floating-mentions.css', import.meta.url), mentionsCss.css)
+      const selectionStyle = fileURLToPath(new URL('./renderer/selection-ui.tw.css', import.meta.url))
+      const selectionCss = await postcss([tailwind()]).process(await readFile(selectionStyle, 'utf8'), { from: selectionStyle })
+      for (const name of ['selection-toolbar', 'selection-result']) {
+        await writeFile(new URL(`./renderer/${name}.css`, import.meta.url), selectionCss.css)
+      }
+      const captureStyle = fileURLToPath(new URL('./renderer/capture.tw.css', import.meta.url))
+      const captureCss = await postcss([tailwind()]).process(await readFile(captureStyle, 'utf8'), { from: captureStyle })
+      await writeFile(new URL('./renderer/capture.css', import.meta.url), captureCss.css)
+      await build({
+        configFile: false,
+        root: fileURLToPath(new URL('.', import.meta.url)),
+        define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+        build: {
+          outDir: 'renderer', emptyOutDir: false,
+          lib: { entry: 'src/selection-markdown.ts', formats: ['iife'], name: 'DshMarkdown',
+            fileName: () => 'selection-markdown.js' },
+        },
+      })
+      // 普通构建和打包构建都生成平台辅助资源，Windows 生成占位文件。
+      for (const script of ['build-macos-selection.mjs', 'build-macos-sck-napi.mjs']) {
+        execFileSync(process.execPath, [fileURLToPath(new URL('./scripts/' + script, import.meta.url))], { stdio: 'inherit' })
+      }
       await build({
         configFile: false,
         plugins: [{
@@ -94,10 +123,10 @@ export default defineConfig([
     fixedExtension: false,
     dts: false,
     clean: false,
-    deps: { neverBundle: ['electron'] },
+    deps: { neverBundle: ['electron', 'koffi'] },
   },
-  ...(['preload-app', 'preload-welcome', 'preload-platform-account', 'preload-mandatory', 'preload-update-dialog'] as const).map(name => ({
-    // Sandboxed Electron preloads run as CommonJS even though the application package is ESM.
+  ...(['preload', 'preload-app', 'preload-welcome', 'preload-platform-account', 'preload-mandatory', 'preload-update-dialog'] as const).map(name => ({
+
     entry: { [name]: `lib/types/${name}.js` },
     plugins: [packagedImportsPlugin(preloadImports)],
     outDir: 'lib',

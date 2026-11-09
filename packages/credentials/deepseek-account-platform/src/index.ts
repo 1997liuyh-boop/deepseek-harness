@@ -12,7 +12,7 @@ import { credentialKey } from '@deepseek-ai/dsh-credentials'
 import type { AuthorizationSession } from '@deepseek-ai/dsh-authorization'
 import { profile, readAccountDetail, readUnnotifiedBonuses, sendBonusNotified } from './details.ts'
 import { revokeAccount, type LogoutRetryPolicy } from './logout.ts'
-import { AccountUnauthorizedError, PlatformAuthError, platformHeaders, platformOrigin, browserUrl, requestPlatform, initialization, exchange, loginOrigin } from './protocol.ts'
+import { AccountUnauthorizedError, PlatformAccessTransport, PlatformAuthError, platformHeaders, platformOrigin, browserUrl, requestPlatform, initialization, exchange, loginOrigin } from './protocol.ts'
 
 const KEY = credentialKey('deepseek-account-platform', 'default')
 const DEVICE = credentialKey('deepseek-account-platform', 'device')
@@ -96,6 +96,7 @@ export class PlatformAccount extends DeepSeekAccount {
   private readonly attemptTimeout: number
   private readonly logoutPolicy: LogoutRetryPolicy
   private readonly logoutLifetime = new AbortController()
+  private readonly transport: PlatformAccessTransport
   private readonly revocations = new Set<Promise<void>>()
   private attempt: Attempt | undefined
   private readonly listeners = new Set<(identityOnly: boolean) => void>()
@@ -115,6 +116,8 @@ export class PlatformAccount extends DeepSeekAccount {
     const resolved = Config(config)
     this.embeddedPageDist = resolved.embeddedPageDist
     this.origin = platformOrigin(resolved.platformOrigin, resolved.allowLoopbackHttp)
+    this.transport = new PlatformAccessTransport(this.origin, (request, signal) =>
+      this.ctx.waterfall('deepseek-account/platform-access', request, signal, () => Promise.resolve(undefined)))
     const inference = new URL(resolved.inferenceOrigin)
     if (!['http:', 'https:'].includes(inference.protocol) || inference.username || inference.password
       || inference.pathname !== '/' || inference.search || inference.hash) {
@@ -214,7 +217,7 @@ export class PlatformAccount extends DeepSeekAccount {
     if (accountId === null) return null
     try {
       const bonuses = await readUnnotifiedBonuses(this.origin, stored.token,
-        AbortSignal.any([lifetime.signal, AbortSignal.timeout(this.requestTimeout)]), headers)
+        AbortSignal.any([lifetime.signal, AbortSignal.timeout(this.requestTimeout)]), headers, this.transport)
       return { accountId, bonuses }
     } catch (error) {
       if (error instanceof AccountUnauthorizedError) {
@@ -234,7 +237,7 @@ export class PlatformAccount extends DeepSeekAccount {
     if (current === null || current !== accountId) return false
     try {
       await sendBonusNotified(this.origin, stored.token, orderId,
-        AbortSignal.any([lifetime.signal, AbortSignal.timeout(this.requestTimeout)]), headers)
+        AbortSignal.any([lifetime.signal, AbortSignal.timeout(this.requestTimeout)]), headers, this.transport)
       return true
     } catch (error) {
       if (error instanceof AccountUnauthorizedError) {
@@ -261,7 +264,7 @@ export class PlatformAccount extends DeepSeekAccount {
     if (details === null) return null
     if (details.status === 'failed') {
       // The query named no identity, and the cache is empty or belongs to another grant.
-      throw new PlatformAuthError('network')
+      throw new PlatformAuthError(details.errorCode ?? 'network')
     }
     this.cacheProfile(stored.token, details)
     return this.identityOf(details)
@@ -304,7 +307,7 @@ export class PlatformAccount extends DeepSeekAccount {
     }
     try {
       const details = await readAccountDetail(field, this.origin, stored.token,
-        AbortSignal.any([lifetime.signal, AbortSignal.timeout(field === 'balance' ? this.balanceTimeout : this.requestTimeout)]), headers)
+        AbortSignal.any([lifetime.signal, AbortSignal.timeout(field === 'balance' ? this.balanceTimeout : this.requestTimeout)]), headers, this.transport)
       return this.detailsLifetime !== lifetime ? null : details
     } catch (_unauthorized) {
       // readAccountDetail exposes only authenticated credential rejection failures.
@@ -632,7 +635,8 @@ export class PlatformAccount extends DeepSeekAccount {
 
   private request(method: string, body: unknown, signal: AbortSignal, headers: Record<string, string>): Promise<unknown> {
     return requestPlatform(this.origin, method, body,
-      AbortSignal.any([signal, AbortSignal.timeout(this.requestTimeout)]), { ...this.requestHeaders, ...headers })
+      AbortSignal.any([signal, AbortSignal.timeout(this.requestTimeout)]), { ...this.requestHeaders, ...headers },
+      method === 'auth_cancel' ? undefined : this.transport)
   }
 
   private finishFailedCallback(attempt: Attempt): void {

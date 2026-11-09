@@ -1,4 +1,4 @@
-/** Session commands whose activation policy is explicit at each Remote method. */
+
 
 import type { ProjectionHandle } from '@deepseek-ai/dsh-session-projection'
 import { continuationProjectionDefinition, type ContinuationState } from './continuation.ts'
@@ -68,10 +68,10 @@ export function hasPromptContent(content: readonly PromptContentCandidate[]): bo
   return content.some(part => part.type !== 'text' || part.text.trim().length > 0)
 }
 
-/**
- * Resolve the omitted-`atSeq` default to the latest completed-turn prefix,
- * including standalone events before the next turn begins.
- */
+
+
+
+
 function latestCompletedPrefixBoundary(events: readonly SessionEvent[]): SessionSeq | undefined {
   const lastTurnEnd = events.findLast(event => event.type === 'turn/end')
   if (lastTurnEnd === undefined) return undefined
@@ -83,6 +83,7 @@ function latestCompletedPrefixBoundary(events: readonly SessionEvent[]): Session
   }
   return boundary
 }
+
 
 /** Implements Session business commands delegated by the Session Controller Remote service. */
 export class SessionCommandController {
@@ -110,6 +111,12 @@ export class SessionCommandController {
     private readonly agents: ApiSessionAgentController,
     private readonly defaultCwd: string,
   ) {}
+
+
+
+
+
+
 
   /**
    * Create one ordinary Session for a new conversation, reusing the named
@@ -177,7 +184,7 @@ export class SessionCommandController {
         }
         await this.ctx.llm.resolveCallConfig(selected)
         agent.model.select(selected)
-        void this.ctx.agentDefaultModel.saveSelection(selected).catch((error: unknown) => {
+        if (request.saveAsDefault !== false) void this.ctx.agentDefaultModel.saveSelection(selected).catch((error: unknown) => {
           this.ctx.logger.warn(
             `session-controller: model selection changed for the Session but the default was not saved: ${String(error)}`,
           )
@@ -193,6 +200,11 @@ export class SessionCommandController {
       }
     })
   }
+
+
+
+
+
 
   /**
    * Normalize and append a user-owned Session title.
@@ -219,6 +231,13 @@ export class SessionCommandController {
       )
     }
   }
+
+
+
+
+
+
+
 
   /**
    * Create a new ordinary Session from an exact event prefix. An explicit
@@ -261,7 +280,16 @@ export class SessionCommandController {
         { sessionId: request.sessionId },
       )
     }
-    const seed = buildForkSeed(source.events, boundary)
+    const inherited = buildForkSeed(source.events, boundary)
+    const seed = request.readableHistory !== true ? inherited : inherited.map((event) => {
+      if (event.type !== 'assistant/message') return event
+      const message = event.data.message
+      const { replayState: _replayState, ...messageSource } = message.source
+      return { ...event, data: { ...event.data, message: freezeMessage({
+        ...message, source: messageSource,
+        content: message.content.filter(block => block.type !== 'reasoning' || block.text.trim() !== ''),
+      }) } }
+    })
     let workspace: Workspace | undefined
     try {
       workspace = await this.forkWorkspace(source.header)
@@ -439,14 +467,21 @@ export class SessionCommandController {
     }
   }
 
+
+
+
+
+
   /**
    * Mutate one pending Inbox occurrence, restoring an ordinary cold Agent when needed.
    * @param request - Session, queue item, and requested mutation.
    * @returns acknowledgement that the queue mutation was applied.
    */
   async updateQueue(request: SessionUpdateQueueRequest): Promise<SessionUpdateQueueValue> {
+    this.ctx.sessions.access.assert(request.sessionId)
     if (request.action.kind === 'edit') {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- Remote callers can submit untyped JSON.
+
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- 远端入口仍需拒绝未经过类型约束的非文本 JSON。
       if (request.action.content.some(block => block.type !== 'text')) {
         throw new RemoteError(
           'session/attachment-invalid',
@@ -518,12 +553,18 @@ export class SessionCommandController {
     return { accepted: true }
   }
 
+
+
+
+
+
   /**
    * Cancel one live ordinary Agent while retaining pending inbox work.
    * @param request - Session whose active Agent turn is cancelled.
    * @returns acknowledgement that cancellation was requested.
    */
   cancel(request: SessionCancelRequest): SessionCancelValue {
+    this.ctx.sessions.access.assert(request.sessionId)
     const agent = this.ctx.agents.get(request.sessionId)
     if (agent === undefined) {
       throw new RemoteError(

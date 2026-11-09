@@ -23,6 +23,77 @@ async function withDirectory(action: (directory: string) => Promise<void>): Prom
 }
 
 describe('Desktop local packaging configuration', () => {
+  it('selects local unsigned Windows defaults without reading dotenv or inheriting release settings', async () => {
+    await withDirectory(async (directory) => {
+      const parent = {
+        PATH: 'build-tools', HTTPS_PROXY: 'http://proxy.example:8080',
+        DSH_DESKTOP_NPM_REGISTRY: 'https://registry.npmmirror.com',
+        DSH_DESKTOP_APP_ID: 'com.example.release', DSH_DESKTOP_UNSIGNED: '0',
+        DSH_DESKTOP_LOCAL_UNSIGNED: '0', DSH_DESKTOP_AUTO_UPDATE_ENV: 'production',
+        DSH_DESKTOP_MANDATORY_UPDATE_CONFIG: 'invalid-json',
+        DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN: 'https://policy.example.com',
+        DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'unused-pin', DSH_DESKTOP_WINDOWS_COMPRESSION_LEVEL: '9',
+        CSC_LINK: 'missing.pfx', APPLE_API_KEY: 'missing.p8', DOWNLOAD_PROD_COS_SECRET_KEY: 'unused-secret',
+      }
+      const local = loadDesktopPackageEnvironment('win32', parent, directory, { unsigned: true, local: true })
+      expect(local).toEqual({
+        PATH: parent.PATH, HTTPS_PROXY: parent.HTTPS_PROXY, DSH_DESKTOP_NPM_REGISTRY: parent.DSH_DESKTOP_NPM_REGISTRY,
+        DSH_DESKTOP_APP_ID: 'com.deepseek.harness', DSH_DESKTOP_UNSIGNED: '1', DSH_DESKTOP_LOCAL_UNSIGNED: '1',
+      })
+      expect(() => { validateDesktopPackageEnvironment(local, WINDOWS, { unsigned: true }) }).not.toThrow()
+      await writeFile(join(directory, '.env.windows'), 'INVALID_RELEASE_SETTING=unused\n')
+      expect(loadDesktopPackageEnvironment('win32', parent, directory, { unsigned: true, local: true })).toEqual(local)
+      expect(parent.DSH_DESKTOP_APP_ID).toBe('com.example.release')
+      expect(parent.DSH_DESKTOP_LOCAL_UNSIGNED).toBe('0')
+      expect(() => { validateDesktopPackageEnvironment(local, WINDOWS) }).toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
+      expect(() => { validateDesktopPackageEnvironment({ ...local, DSH_PACKAGING_PRESET: 'test' }, WINDOWS, { unsigned: true }) })
+        .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
+    })
+  })
+
+  it('requires an explicit local option and retains dotenv behavior for ordinary unsigned Windows packaging', async () => {
+    await withDirectory(async (directory) => {
+      const parent = { DSH_DESKTOP_LOCAL_UNSIGNED: '1' }
+      expect(() => loadDesktopPackageEnvironment('win32', parent, directory, { unsigned: true })).toThrow('.env.windows.example')
+      await writeFile(join(directory, '.env.windows'), 'DSH_DESKTOP_APP_ID=com.example.desktop\n')
+      const selected = loadDesktopPackageEnvironment('win32', parent, directory, { unsigned: true })
+      expect(selected).toEqual({ DSH_DESKTOP_APP_ID: 'com.example.desktop' })
+      expect(() => { validateDesktopPackageEnvironment(selected, WINDOWS, { unsigned: true }) })
+        .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
+      expect(() => loadDesktopPackageEnvironment('win32', {}, directory, { local: true })).toThrow('--local requires unsigned Windows')
+      expect(() => loadDesktopPackageEnvironment('win32', {}, directory, { local: true, unsigned: true, prepareOnly: true }))
+        .toThrow('--local requires unsigned Windows')
+      expect(() => loadDesktopPackageEnvironment('darwin', {}, directory, { local: true, unsigned: true }))
+        .toThrow('--local requires unsigned Windows')
+      expect(() => loadDesktopPackageEnvironment('win32', { DSH_PACKAGING_PRESET: 'test' }, directory, { local: true, unsigned: true }))
+        .toThrow('without --prepare-only or a preset')
+    })
+  })
+
+  it.each(['3', '7'])('retains explicit Windows workflow compression %s for local unsigned packages', (compression) => {
+    const local = loadDesktopPackageEnvironment('win32', { PACKAGE_WINDOWS_COMPRESSION_LEVEL: compression }, 'missing-settings', { unsigned: true, local: true })
+    expect(resolveWindowsPackageSettings(local).compressionLevel).toBe(Number(compression))
+    expect(() => loadDesktopPackageEnvironment('win32', { PACKAGE_TEST_RELEASE_ID: 'a'.repeat(32) }, 'missing-settings', { unsigned: true, local: true }))
+      .toThrow('test release ID override requires the test preset')
+  })
+
+  it('keeps selected unsigned Windows presets subject to update policy validation', async () => {
+    await withDirectory(async (directory) => {
+      await mkdir(join(directory, 'presets'))
+      const path = join(directory, 'presets/test.env')
+      const settings = 'DSH_DESKTOP_AUTO_UPDATE_ENV=test\nDSH_DESKTOP_APP_ID=com.example.desktop\n'
+      await writeFile(path, settings)
+      const parent = { DSH_PACKAGING_PRESET: 'test', DSH_PACKAGING_CONFIG_DIR: directory, DSH_DESKTOP_LOCAL_UNSIGNED: '1' }
+      const selected = loadDesktopPackageEnvironment('win32', parent, 'missing-settings', { unsigned: true })
+      expect(selected).not.toHaveProperty('DSH_DESKTOP_LOCAL_UNSIGNED')
+      expect(() => { validateDesktopPackageEnvironment(selected, WINDOWS, { unsigned: true }) })
+        .toThrow('DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN')
+      await writeFile(path, settings + Object.entries(POLICY).map(([name, value]) => `${name}='${value}'\n`).join(''))
+      expect(() => { validateDesktopPackageEnvironment(loadDesktopPackageEnvironment('win32', parent, directory, { unsigned: true }), WINDOWS, { unsigned: true }) })
+        .not.toThrow()
+    })
+  })
+
   it('loads file-owned compression and defaults to fast Windows archive compression', async () => {
     expect(resolveWindowsPackageSettings({}).compressionLevel).toBe(3)
     await withDirectory(async (directory) => {

@@ -15,20 +15,23 @@
   en: d152484eb41ac6b4
   zh: 09388d293f9be9cb
 /deepseek-ai-dsh-client-ui-settings-models/use-this-package:
-  en: db5aaf7f702e1f0c
-  zh: 409a78c14fb2b6e3
+  en: 459a84116c5d0e86
+  zh: 7a5f0c3cf2d8a260
+/deepseek-ai-dsh-client-ui-settings-models/use-this-package/import-from-cc-switch:
+  en: 975143abe8ad610b
+  zh: abda2c53d4dc942f
 /deepseek-ai-dsh-client-ui-settings-models/use-this-package/api-keys:
-  en: f4817eb2e3537ed9
-  zh: e589c193fa85473f
+  en: 7304bab74c45ca4e
+  zh: 6fdf3ec27af08447
 /deepseek-ai-dsh-client-ui-settings-models/use-this-package/editing-a-provider:
-  en: ce52da7e6065ccc4
-  zh: c63690cb5de5ea85
+  en: e86b2ed8c0831bd9
+  zh: 7a364915b34cbd15
 /deepseek-ai-dsh-client-ui-settings-models/use-this-package/adding-and-deleting-providers:
   en: c0b04b2b11af60d3
   zh: d195eec281e445cb
 /deepseek-ai-dsh-client-ui-settings-models/use-this-package/first-run-dialogs:
-  en: 589397a35f82244e
-  zh: 342fbceee2c173a2
+  en: b169d04e5e7899ef
+  zh: 941762d7371d31cb
 /deepseek-ai-dsh-client-ui-settings-models/use-this-package/extension-slots:
   en: 79f8f80bdaba73cd
   zh: f4d7496b293fbf81
@@ -48,8 +51,8 @@
   en: 20abd8b98b6c20e2
   zh: 6dfda7955ce5f33f
 /deepseek-ai-dsh-client-ui-settings-models/model-experience:
-  en: 3120df665299c634
-  zh: 1d9f365d091d0d2a
+  en: 168847c16fdb4a97
+  zh: d4ef01749d4ee410
 /deepseek-ai-dsh-client-ui-settings-models/model-experience/kv-cache-effect:
   en: ca75c51c89c2c9b0
   zh: 9779c98fff4c949a

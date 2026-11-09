@@ -83,7 +83,7 @@ export class SessionCorpus {
         formatStatus: 'current',
       })
     }
-    return [...records.values()].sort(compareSessions)
+    return [...records.values()].filter(record => this._ctx.sessions.access.allows(record.header.id)).sort(compareSessions)
   }
 
   /**
@@ -96,24 +96,26 @@ export class SessionCorpus {
    * @returns detached live-preferred header and events.
    */
   async load(sessionId: SessionId, signal?: AbortSignal): Promise<LogicalSession> {
-    signal?.throwIfAborted()
+    this._ctx.sessions.access.assert(sessionId)
+    signal = AbortSignal.any([this._ctx.sessions.access.signal, ...signal === undefined ? [] : [signal]])
+    signal.throwIfAborted()
     const live = this._ctx.sessions.get(sessionId)
     if (live !== undefined) {
       const snapshot = snapshotLive(live)
-      signal?.throwIfAborted()
+      signal.throwIfAborted()
       return snapshot
     }
     const persistence = this._persistence
     if (persistence === undefined) throw notFound(sessionId)
     const listed = (await listPersisted(persistence, signal)).find(snapshot => snapshot.header.id === sessionId)
-    signal?.throwIfAborted()
+    signal.throwIfAborted()
     if (listed === undefined) throw notFound(sessionId)
     const loaded = await inspectPersisted(persistence, sessionId, signal)
-    signal?.throwIfAborted()
+    signal.throwIfAborted()
     const attached = this._ctx.sessions.get(sessionId)
     if (attached !== undefined) {
       const snapshot = snapshotLive(attached)
-      signal?.throwIfAborted()
+      signal.throwIfAborted()
       return snapshot
     }
     assertSessionHeadersCompatible(loaded.header, listed.header)
@@ -122,7 +124,7 @@ export class SessionCorpus {
       inheritedEventCount: loaded.inheritedEventCount,
       events: loaded.events.map(event => structuredClone(event)),
     }
-    signal?.throwIfAborted()
+    signal.throwIfAborted()
     return snapshot
   }
 
@@ -141,8 +143,10 @@ export class SessionCorpus {
     project: (source: LogicalSessionSource) => Value,
     signal?: AbortSignal,
   ): Promise<LogicalProjectionResult<Value>[]> {
+    signal = AbortSignal.any([this._ctx.sessions.access.signal, ...signal === undefined ? [] : [signal]])
     const ids = [...new Set(sessionIds)]
-    signal?.throwIfAborted()
+    for (const id of ids) this._ctx.sessions.access.assert(id)
+    signal.throwIfAborted()
     const resolved = new Map<SessionId, LogicalProjectionResult<Value>>()
     const unresolved: SessionId[] = []
     for (const id of ids) {
@@ -166,9 +170,9 @@ export class SessionCorpus {
     let persisted: readonly SessionPersistenceSnapshot[]
     try {
       persisted = await listPersisted(persistence, signal)
-      signal?.throwIfAborted()
+      signal.throwIfAborted()
     } catch (error: unknown) {
-      if (signal?.aborted) signal.throwIfAborted()
+      if (signal.aborted) signal.throwIfAborted()
       for (const sessionId of unresolved) {
         resolved.set(sessionId, { sessionId, status: 'rejected', reason: error })
       }
@@ -185,9 +189,9 @@ export class SessionCorpus {
         return
       }
       try {
-        signal?.throwIfAborted()
+        signal.throwIfAborted()
         const loaded = await inspectPersisted(persistence, sessionId, signal)
-        signal?.throwIfAborted()
+        signal.throwIfAborted()
         const attached = this._ctx.sessions.get(sessionId)
         if (attached !== undefined) {
           resolved.set(sessionId, projectSource(sessionId, sourceLive(attached), project, signal))
@@ -199,14 +203,14 @@ export class SessionCorpus {
           events: loaded.events,
         }, project, signal))
       } catch (error: unknown) {
-        if (signal?.aborted) signal.throwIfAborted()
+        if (signal.aborted) signal.throwIfAborted()
         resolved.set(sessionId, { sessionId, status: 'rejected', reason: error })
       }
     }
     let cursor = 0
     const worker = async (): Promise<void> => {
       for (;;) {
-        signal?.throwIfAborted()
+        signal.throwIfAborted()
         const index = cursor
         if (index >= unresolved.length) return
         cursor += 1
@@ -217,7 +221,7 @@ export class SessionCorpus {
     const settlements = await Promise.allSettled(
       Array.from({ length: workerCount }, () => worker()),
     )
-    if (signal?.aborted) signal.throwIfAborted()
+    if (signal.aborted) signal.throwIfAborted()
     /* v8 ignore start -- per-id failures settle inside resolvePersisted; workers reject only on abort above */
     for (const settlement of settlements) {
       if (settlement.status === 'rejected') {
@@ -226,7 +230,7 @@ export class SessionCorpus {
       }
     }
     /* v8 ignore stop */
-    signal?.throwIfAborted()
+    signal.throwIfAborted()
     return orderedResults(ids, resolved)
   }
 }

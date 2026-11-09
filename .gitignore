@@ -31,7 +31,14 @@ tmp/
 mise.toml
 dist-exe/
 /dist/
+# 本地交付物、任务记录和已迁移的旧工作室参考目录。
+/output/
+/deliverables/
+/.planning/
+/plugins/
+/docs/superpowers/
 apps/desktop/.desktop-build/
+apps/desktop/renderer/selection-markdown.js
 python/sdk-runtime/src/deepseek_harness_runtime/runtime/
 python/**/__pycache__/
 python/**/.pytest_cache/

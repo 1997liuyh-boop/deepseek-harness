@@ -1081,6 +1081,19 @@ describe('tokenizeSessionFixtureCwd', () => {
     expect(tokenizeSessionFixtureCwd(out)).toBe(out)
   })
 
+  it('tokenizes JSON-quoted Windows runtime directories without replacing other paths', () => {
+    const cwd = 'C:\\Users\\example\\Temp\\sdk-case'
+    const raw = [
+      JSON.stringify({ type: 'session', id: 's', createdAt: 1, cwd }),
+      JSON.stringify({ type: 'user/message', data: { text: `Current working directory: ${JSON.stringify(cwd)}. Other: C:\\data\\kept` } }),
+      '',
+    ].join('\n')
+    const out = tokenizeSessionFixtureCwd(raw)
+    const message = JSON.parse(out.split('\n')[1] ?? '{}') as { data: { text: string } }
+    expect(message.data.text).toBe('Current working directory: "{{cwd}}". Other: C:\\data\\kept')
+    expect(tokenizeSessionFixtureCwd(out)).toBe(out)
+  })
+
   it('rejects a log without a session cwd', () => {
     expect(() => tokenizeSessionFixtureCwd('')).toThrow(
       'acp-snapshot: cannot tokenize a cwd without a basename',

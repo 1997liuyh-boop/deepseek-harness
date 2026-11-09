@@ -415,7 +415,7 @@ export interface SessionArchiveConfirmInjected {
 /** Fork action share. */
 export interface ForkSessionInjected {
   /** Fork a Session at its last completed turn; the child arrives through the Host list. */
-  forkSession: (sessionId: SessionId) => void
+  forkSession: (sessionId: SessionId, readableHistory?: boolean) => void
 }
 
 /** Rename action share: the row only raises the request; the dialog entry answers it. */

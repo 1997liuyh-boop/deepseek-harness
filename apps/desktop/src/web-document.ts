@@ -1,4 +1,4 @@
-/** Local Web document and authenticated HTTP forwarding for the application window. */
+
 import { readFile } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 
@@ -8,13 +8,78 @@ const MIME: Readonly<Record<string, string>> = {
   '.woff2': 'font/woff2', '.png': 'image/png', '.ico': 'image/x-icon',
 }
 const BOOT = '<script>globalThis.__DSH_BOOT_READY__ = Promise.withResolvers()</script>'
+const OVERLAY_READY = '<script>(globalThis.__DSH_BOOT_READY__ ??= Promise.withResolvers()).resolve()</script>'
 
-/**
- * Read an application-owned static asset; the index waits for asynchronous Host injections.
- * @param request - Local application request.
- * @param root - Packaged Web dist directory.
- * @returns Static response, or a missing/invalid path response.
- */
+
+type IndexInjection =
+  | { kind: 'global'; name: string; value: unknown }
+  | { kind: 'script'; placement: 'head' | 'body'; text: string }
+  | { kind: 'script-src'; placement: 'head' | 'body'; src: string }
+  | { kind: 'script-preload'; src: string }
+  | { kind: 'style'; text: string }
+  | { kind: 'html'; placement: 'head' | 'body'; html: string }
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}
+
+
+function renderOverlayInjections(html: string, rows: readonly IndexInjection[]): string {
+  let head = ''
+  let body = ''
+  for (const row of rows) {
+    switch (row.kind) {
+      case 'global': {
+        const name = JSON.stringify(row.name).replaceAll('<', '\\u003c')
+        const value = row.value === undefined ? 'undefined' : JSON.stringify(row.value).replaceAll('<', '\\u003c')
+        head += `<script>globalThis[${name}] = ${value}</script>`
+        break
+      }
+      case 'script':
+        if (row.placement === 'head') head += `<script>${row.text}</script>`
+        else body += `<script>${row.text}</script>`
+        break
+      case 'script-src': {
+        const tag = `<script src="${escapeHtmlAttribute(row.src)}"></script>`
+        if (row.placement === 'head') head += tag
+        else body += tag
+        break
+      }
+      case 'script-preload':
+        head += `<link rel="preload" as="script" href="${escapeHtmlAttribute(row.src)}">`
+        break
+      case 'style':
+        head += `<style>${row.text}</style>`
+        break
+      case 'html':
+        if (row.placement === 'head') head += row.html
+        else body += row.html
+        break
+      default: {
+        const unexpected: never = row
+        throw new Error(`desktop overlay: unknown index injection ${JSON.stringify(unexpected)}`)
+      }
+    }
+  }
+  body += OVERLAY_READY
+  let out = html
+  if (head !== '') {
+    const open = /<head(?:\s[^>]*)?>/i.exec(out)
+    out = open === null ? `${head}${out}` : `${out.slice(0, open.index + open[0].length)}${head}${out.slice(open.index + open[0].length)}`
+  }
+  if (body !== '') {
+    const open = /<body(?:\s[^>]*)?>/i.exec(out)
+    out = open === null ? `${out}${body}` : `${out.slice(0, open.index + open[0].length)}${body}${out.slice(open.index + open[0].length)}`
+  }
+  return out
+}
+
+
+
+
+
+
+
 export async function serveWebDocument(request: Request, root: string): Promise<Response> {
   if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 })
   const url = new URL(request.url)
@@ -35,11 +100,38 @@ export async function serveWebDocument(request: Request, root: string): Promise<
   })
 }
 
-/**
- * Exchange the Host launch URL for an authority-bound browser cookie.
- * @param url - Authenticated URL reported by the owned Host process.
- * @returns Cookie header for requests forwarded to that Host.
- */
+
+
+
+
+
+
+
+
+
+
+export async function serveOverlayDocument(
+  request: Request, root: string, injections: readonly unknown[], streamBaseUrl: string,
+): Promise<Response> {
+  if (!['GET', 'HEAD'].includes(request.method)) return new Response(null, { status: 405 })
+  const target = resolve(root, 'index.html')
+  let html: string
+  try { html = await readFile(target, 'utf8') } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Response(null, { status: 404 })
+    throw error
+  }
+  const transport = `<script>globalThis.__DSH_TRANSPORT__=${JSON.stringify({ ownsHost: true, streamBaseUrl })}</script>`
+  const rendered = renderOverlayInjections(html.replace('<head>', `<head>${transport}`), injections as readonly IndexInjection[])
+  return new Response(request.method === 'HEAD' ? null : rendered, {
+    headers: { 'content-type': MIME['.html'] ?? 'text/html; charset=utf-8' },
+  })
+}
+
+
+
+
+
+
 export async function authenticateWebHost(url: string): Promise<string> {
   const response = await fetch(url, { redirect: 'manual' })
   const cookie = response.headers.get('set-cookie')
@@ -81,23 +173,26 @@ const WITHHELD_RESPONSE_HEADERS = [
   'transfer-encoding', 'connection', 'keep-alive', 'te', 'trailer', 'upgrade', 'proxy-authenticate', 'proxy-authorization',
 ]
 
-/** Host routes whose responses carry immutable cache headers keyed by a per-process revision. */
+
 const PLUGIN_BUNDLE_PATH = /^\/plugins\//u
 
-/**
- * Forward local application requests to its authenticated Host, preserving streaming and cancellation.
- * Plugin bundle responses lose their `cache-control` for `no-store`: the Host marks them immutable
- * under a revision that changes every launch, so Chromium's disk cache would only accumulate bundles
- * no later launch can reuse.
- * @param request - Request from the application origin.
- * @param host - Owned Host URL.
- * @param cookie - Host-issued authentication cookie.
- * @returns Host response without connection-level headers.
- */
+
+
+
+
+
+
+
+
+
+
 export async function forwardWebRequest(request: Request, host: string, cookie: string): Promise<Response> {
   const source = new URL(request.url)
   const origin = request.headers.get('origin')
-  if (origin !== null && origin !== 'dsh-app://app') return new Response(null, { status: 403 })
+
+  if (origin !== null && origin !== 'dsh-app://app' && origin !== 'dsh-app://shell') {
+    return new Response(null, { status: 403 })
+  }
   const target = new URL(host)
   target.pathname = source.pathname
   target.search = source.search

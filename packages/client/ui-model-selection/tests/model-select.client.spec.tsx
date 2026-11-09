@@ -82,6 +82,21 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
+it('会话菜单可直接进入聚合模式并显示中文名称', async () => {
+  const directory = createSnapshotStore(state({ groups: [...state().groups, {
+    id: 'dsh-routing', name: 'System routing', models: [
+      { id: 'system', name: 'Follow system' }, { id: 'aggregate', name: 'Aggregate routing' },
+    ],
+  }] }))
+  const select = vi.fn(async (_selection: ModelSelection) => ({ ok: true as const, value: undefined }))
+  render(<ModelSelect locked={false} available directory={directory} load={vi.fn()} select={select} t={t} resolveText={value => typeof value === 'string' ? value : value.en} renderSlot={renderLabel} />)
+  fireEvent.click(screen.getByRole('button', { name: /选择模型，当前/ }))
+  const aggregate = screen.getByRole('menuitemradio', { name: '聚合模式' })
+  expect(aggregate.getAttribute('aria-checked')).toBe('false')
+  fireEvent.click(aggregate)
+  await waitFor(() => { expect(select).toHaveBeenCalledWith({ provider: 'dsh-routing', model: 'aggregate' }) })
+})
+
 describe('ModelSelect label slot', () => {
   it('distinguishes identical model names and ids by provider across all placements and restores labels on unload', async () => {
     const runtime = await SlotTestRuntime.create()

@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-11-05-image-aware-aggregate-recovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-11-05-image-aware-aggregate-recovery.md
+/agent-note-image-aware-aggregate-recovery-and-reasoning-effort-carry-over:
+  en: 14d6ea541a831d53
+  zh: 034209354176c365
+/agent-note-image-aware-aggregate-recovery-and-reasoning-effort-carry-over/problem:
+  en: ad505736f7e4282d
+  zh: 51b81d3ebcb8911e
+/agent-note-image-aware-aggregate-recovery-and-reasoning-effort-carry-over/decision:
+  en: 9088810bb61944ec
+  zh: ec54340c03fbd1af
+/agent-note-image-aware-aggregate-recovery-and-reasoning-effort-carry-over/alternatives-considered:
+  en: 217759d609e7d850
+  zh: a895f3890723cc7f
+/agent-note-image-aware-aggregate-recovery-and-reasoning-effort-carry-over/consequences:
+  en: 1428f9a15e11839f
+  zh: 62895c264ca82b25
+/agent-note-image-aware-aggregate-recovery-and-reasoning-effort-carry-over/testing:
+  en: f46e2f12b4078bcc
+  zh: 68417fc73bfe3e10

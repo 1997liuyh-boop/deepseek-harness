@@ -8,6 +8,8 @@ import { isDesktopUpdateChannel } from './settings-file.ts'
 import type { ProductEventMap, ProductEvent } from '@deepseek-ai/dsh-client-product-analytics/types'
 import { WINDOWS_TITLEBAR_HEIGHT } from './windows-layout.ts'
 import { access, readFile, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -19,31 +21,77 @@ import {
   Menu,
   powerMonitor,
   nativeImage,
+  net,
   nativeTheme,
   protocol,
+  screen,
   session,
   shell,
+  systemPreferences,
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager } from './project-manager.ts'
-import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError } from './host-process.ts'
+import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, type DesktopHostOrbCommand, type DesktopOrbHostHandlers } from './host-process.ts'
+import { captureExcludedRegionOnElectron } from './macos-sck-napi.ts'
 import { DesktopPlatformView, PLATFORM_IPC, platformBounds } from './platform-view.ts'
+import { DesktopPlatformAccess } from './platform-access.ts'
 import { installDesktopFileDrag } from './file-drag.ts'
 import { installDesktopDirectoryPicker } from './directory-picker.ts'
 import { installMicrophonePermissions } from './microphone-permissions.ts'
 import { DesktopBackendController } from './backend-controller.ts'
-import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState } from './ipc.ts'
+import { DESKTOP_IPC, SCHEME, assertDesktopSender, type DesktopUpdateState, type OrbMillifractionWriteResult, type OrbSettingsSnapshot } from './ipc.ts'
 import { readDeviceInfo } from './device-info.ts'
 import { desktopUpdateReadyConfirmation, formatDesktopMessage, resolveDesktopLocale, resolveDesktopStartupLocale } from './locale.ts'
+import {
+  applyFloatingOverlayGuard,
+  clampFloatingWindow,
+  createFloatingWindow,
+  moveFloatingBall,
+  OVERLAY_GUARD_INPUT_APPLY_MS,
+  overlayWindowExcludeIds,
+  resetFloatingOverlayGuard,
+  setFloatingExpanded,
+  unsnapDockedBall,
+} from './floating-window.ts'
+import { ensureOrbWorkspaceDir, readFloatingSessionId, writeFloatingSessionId } from './floating-session.ts'
+import { registerFloatingSessionSync } from './floating-session-sync.ts'
+import { isOrbAgentModelSelection, readOrbAgentModels, writeOrbAgentModels, type OrbAgentModelSelection } from './orb-agent-models.ts'
+import { isOrbPermissionPreset, readOrbPermission, writeOrbPermission } from './orb-permission.ts'
+import {
+  assertOrbSettingsWritable,
+  DEFAULT_ORB_AVATAR_FILE,
+  installOrbAvatarFromPath,
+  ORB_AVATAR_PATH,
+  orbAvatarCacheToken,
+  orbAvatarUrl,
+  orbSettingsSupported,
+  restoreOrbAvatar,
+  serveOrbAvatar,
+} from './orb-avatar.ts'
+import { applyMillifractionCoordinates } from './millifraction-coordinates-apply.ts'
+import { orbCoordinateModeFor, readMillifractionCoordinates, writeMillifractionCoordinates } from './millifraction-coordinates.ts'
+import { isTccRight, TccController } from './tcc.ts'
+import { SelectionToolbarController } from './selection-toolbar-controller.ts'
+import { DesktopCapture } from './desktop-capture.ts'
+import { SelectionAssistant } from './selection-assistant.ts'
+import { isSelectionLanguage } from './selection-prompt.ts'
+import { createSelectionToolbarWindow, hideSelectionToolbar, pointInWindow } from './selection-toolbar-window.ts'
+import {
+  createObservationFrameWindow,
+  hideObservationFrame,
+  raiseOverlayAboveObservationFrame,
+  showObservationFrame,
+} from './observation-frame-window.ts'
+import type { FloatingModelCatalog } from './floating-agent-menu.ts'
 import type { DesktopMessages } from './locale.ts'
-import { claimDesktopSingleInstance } from './single-instance.ts'
 import { desktopUpdateChannel } from './update-channel.ts'
+import { claimDesktopSingleInstance } from './single-instance.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 import { prepareDesktopUpdateWindow } from './update-window.ts'
 import { DesktopCommandManager } from './command-management.ts'
-import { serveWebDocument, authenticateWebHost, forwardWebRequest, removeLegacyHostCookies } from './web-document.ts'
+import { serveWebDocument, serveOverlayDocument, authenticateWebHost, forwardWebRequest, removeLegacyHostCookies } from './web-document.ts'
 import { DesktopFatalRecovery } from './fatal-recovery.ts'
 import { pruneCrashReports, RendererConsoleTail, writeCrashReport, type CrashReportSource } from './crash-report.ts'
 import { OperationJournal } from './operation-journal.ts'
@@ -75,10 +123,10 @@ import { DesktopBackgroundNotice } from './background-notice.ts'
 let focusPrimaryWindow = (): void => {}
 let stopForRecovery = async (): Promise<void> => { await stopOperationReports() }
 let shuttingDown = false
-/**
- * Set by quit entries that must not ask: crash recovery exit and restart, and the
- * development restart command. The installer handoff has its own before-quit branch.
- */
+
+
+
+
 let skipQuitConfirmation = false
 let windowsLanguage: string | undefined = readDesktopLocaleCache(app.getPath('userData'))
 /**
@@ -87,17 +135,17 @@ let windowsLanguage: string | undefined = readDesktopLocaleCache(app.getPath('us
  * failure while tearing down a ready backend still reads as `running`.
  */
 let backendReady = false
-/** Error-level console output of the primary window, attached to crash reports. */
+
 const rendererConsole = new RendererConsoleTail()
 
-// Platform-conventional logs directory (macOS ~/Library/Logs/<name>, otherwise under userData);
-// set before ready so the first fatal report already resolves under it.
+
+
 app.setAppLogsPath()
 
 function currentDesktopLocale(): ReturnType<typeof resolveDesktopLocale> {
   return resolveDesktopLocale(windowsLanguage ?? app.getLocale())
 }
-/** Quit without the task confirmation; the caller has already decided the application must stop. */
+
 function quitWithoutConfirmation(): void {
   skipQuitConfirmation = true
   app.quit()
@@ -174,7 +222,7 @@ function persistCrashReport(error: unknown, source: CrashReportSource): Promise<
 function reportFatal(error: unknown, source: CrashReportSource): void {
   console.error(error)
   if (shuttingDown) {
-    // No dialog during shutdown, but the report still records what failed on the way out.
+
     void persistCrashReport(error, source)
     return
   }
@@ -235,25 +283,32 @@ function developmentHostInspectPort(enabled: boolean): number | undefined {
   return port
 }
 
-/**
- * Opaque chrome fallback matching the built-in sidebar palette (the resolved
- * `--dsw-static-neutral-bluish-900` / `-50` tokens). An approximation for
- * custom themes: Windows swaps in the renderer's measured palette over the
- * windowsAppearance IPC, and macOS shows it only while minimized or hidden.
- * @returns the sidebar fill hex for the active system color scheme.
- */
+
+
+
+
+
+
+
 function chromeFallbackFill(): string {
   return nativeTheme.shouldUseDarkColors ? '#1b1b1c' : '#f9fafb'
 }
 
-/**
- * Add the effective Desktop palette to a Platform authorization URL so the
- * login page opens in the application's theme. `system` resolves through
- * `nativeTheme.shouldUseDarkColors`, which follows the theme source the
- * application preload publishes.
- * @param authorizeUrl - validated Platform authorization URL.
- * @returns the authorization URL carrying `theme=light` or `theme=dark`.
- */
+
+
+
+
+
+
+
+
+function overlayGuardInputApplyDelay(): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, OVERLAY_GUARD_INPUT_APPLY_MS)
+    timer.unref()
+  })
+}
+
 function platformLoginUrl(authorizeUrl: string): string {
   const url = new URL(authorizeUrl)
   url.searchParams.set('theme', nativeTheme.shouldUseDarkColors ? 'dark' : 'light')
@@ -272,14 +327,14 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
       titleBarOverlay: { height: WINDOWS_TITLEBAR_HEIGHT, color: chromeFallbackFill(),
         symbolColor: nativeTheme.shouldUseDarkColors ? '#f9fafb' : '#0f1115' },
     } : {}),
-    // hiddenInset places traffic lights inside the sidebar; sidebar vibrancy
-    // needs a transparent window background to show through the page.
+
+
     ...(process.platform === 'darwin' ? {
       titleBarStyle: 'hiddenInset' as const,
       trafficLightPosition: { x: 16, y: 18 },
       vibrancy: 'sidebar' as const,
-      // 'active' keeps the vibrancy material stable when the window blurs;
-      // 'followWindow' washes the sidebar out behind an unfocused window.
+
+
       visualEffectState: 'active' as const,
       backgroundColor: '#00000000',
     } : {}),
@@ -298,23 +353,23 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     return { action: 'deny' }
   })
   if (process.platform === 'darwin' || process.platform === 'win32') {
-    // Fullscreen hides native window controls; overlays drop their caption clearance.
+
     const sendFullscreen = (): void => {
       if (!window.isDestroyed()) window.webContents.send(DESKTOP_IPC.windowFullscreen, window.isFullScreen())
     }
     window.on('enter-full-screen', sendFullscreen)
     window.on('leave-full-screen', sendFullscreen)
-    // Reloads and navigations re-register the preload listener; resend the
-    // current state so a fullscreen reload does not fall back to windowed CSS.
+
+
     window.webContents.on('did-finish-load', sendFullscreen)
   }
   if (process.platform === 'darwin') {
-    // Deminiaturize reattaches the NSVisualEffectView material late
-    // (electron/electron#25368), so a transparent window shows the desktop
-    // through the sidebar until then. Paint an opaque base while minimized or
-    // hidden so the deminiaturize animation and the reattachment gap show a
-    // solid fill; restoring flips back, and the null -> 'sidebar' transition
-    // forces the material to reattach.
+
+
+
+
+
+
     const applyBackdrop = (): void => {
       if (window.isDestroyed()) return
       if (window.isMinimized() || !window.isVisible()) {
@@ -346,7 +401,7 @@ function createWindow(preload: string, show = false, primary = false): BrowserWi
     } else if (selectionText.length > 0) {
       items.push({ role: 'copy', enabled: editFlags.canCopy })
     }
-    // Empty accelerators suppress Electron's default shortcut labels for native roles.
+
     if (items.length > 0) {
       const messages = currentDesktopLocale().messages
       Menu.buildFromTemplate(items.map(item => ({
@@ -377,14 +432,18 @@ async function main(): Promise<void> {
   const resources = runtimeResources()
   const paths = resolveDesktopPaths()
   const development = !app.isPackaged
+  const computerUsePatch = development
+    ? join(app.getAppPath(), '..', '..', 'packages/computer-use/tool-computer-use/cordis.patch.yml')
+    : join(process.resourcesPath, 'computer-use', 'cordis.patch.yml')
+  if (existsSync(computerUsePatch)) process.env.DSH_COMPUTER_USE_PATCH = computerUsePatch
   const primaryRuntime = development
     ? developmentPrimaryRuntime()
     : join(process.resourcesPath, 'runtime', 'primary-runtime')
   const activeProject = paths.profile
   const manager = new DesktopProjectManager(paths, resources)
-  // Dock and Finder launches inherit only launchd's environment; every Host shares one login-shell read.
+
   const loginShellRead = new AbortController()
-  // The probe runs in its own process group, which outlives Desktop unless the read is aborted.
+
   app.on('will-quit', () => { loginShellRead.abort() })
   const loginShell = readDesktopLoginShellEnvironment(process.env, resolveDesktopLoginShellConfig(process.env), {
     signal: loginShellRead.signal,
@@ -398,6 +457,14 @@ async function main(): Promise<void> {
   let startup: Promise<void> | undefined
   let workspaceRecovery: Promise<void> | undefined
   let mainWindow: BrowserWindow | undefined
+
+  // eslint-disable-next-line prefer-const -- assigned once when the floating window is created
+  let floatingShell: BrowserWindow | undefined
+  let observationFrameWindow: BrowserWindow | undefined
+  let restoreOverlayGuard = (): void => {}
+  const orbHostHandlers: DesktopOrbHostHandlers = {}
+  let overlayTextEditing = false
+  let millifractionApplying: Promise<OrbMillifractionWriteResult> | undefined
   let welcomeWindow: BrowserWindow | undefined
   const installFileDrag = (): (() => Promise<void>) => installDesktopFileDrag(
     event => assertProductSender(event),
@@ -419,7 +486,7 @@ async function main(): Promise<void> {
     if (failure?.status === 'rejected') throw failure.reason
   }
   let enteredWorkspace = false
-  // NSIS passes --updated when it launches the application after installation.
+
   let raiseAfterUpdate = process.platform === 'win32' && process.argv.includes('--updated')
   let shellInstallerOwnsQuit = false
   let requireCleanStop = false
@@ -437,11 +504,11 @@ async function main(): Promise<void> {
   let mandatoryUI: DesktopMandatoryUpdateWindow | undefined
   let policyAuth: DesktopPolicyTestAuth | undefined
   let tray: DesktopTray | undefined
-  /**
-   * The operating system is ending the session: the quit skips its confirmation. Windows sets it
-   * on the definitive session-end message. macOS sets it on the power-off notification, which
-   * another application can still cancel, so the next focus or show of the main window clears it.
-   */
+
+
+
+
+
   let sessionEnding = false
   const isQuitting = (): boolean => quitting
   const currentMainWindow = (): BrowserWindow | undefined => mainWindow
@@ -460,8 +527,8 @@ async function main(): Promise<void> {
     }
     finally { ordinaryDialogs.delete(controller) }
   }
-  // Copy comes from the same locale as the update prompts so the dialog
-  // chrome and its content never mix languages.
+
+
   const showAbout = async (): Promise<void> => {
     await ordinaryMessageBox({ type: 'info', title: locale.messages.aboutMenu, message: locale.messages.aboutProduct,
       detail: formatDesktopMessage(locale.messages.aboutVersion, { version: app.getVersion() }),
@@ -522,12 +589,17 @@ async function main(): Promise<void> {
   const platformView = new DesktopPlatformView(join(app.getAppPath(), 'lib', 'preload-platform-account.cjs'),
     () => locale.id === 'zh-CN' ? 'zh_CN' : 'en_US', process.platform === 'win32' ? 'win32' : 'darwin',
     owner => isMandatory() || updateOverlays.input(owner).blocked)
+  const platformAccess = new DesktopPlatformAccess(() => currentDesktopLocale().messages.platformAccessTitle)
   const backend = new DesktopBackendController((onFailure) => {
     const hostInspectPort = developmentHostInspectPort(development)
     const host = new DesktopHostProcess(resources.node, resources.dsh, activeProject,
-      hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, onFailure,
+      hostInspectPort, { ...hostEnvironment, DSH_CLIENT_VERSION: desktopClientVersion() }, (error) => {
+        restoreOverlayGuard()
+        onFailure(error)
+      },
       primaryRuntime,
-      resources, (next) => { platformView.setSession(next) }, (record) => {
+      resources, (next) => { platformView.setSession(next) }, orbHostHandlers,
+      (request, signal) => platformAccess.fetch(request, signal), (record) => {
         operationJournal ??= new OperationJournal(join(app.getPath('userData'), 'plugin-operations'), {
           segmentBytes: 256 * 1024, recordBytes: 4096, queuedBytes: 64 * 1024,
         })
@@ -584,6 +656,7 @@ async function main(): Promise<void> {
             if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.webContents.send(WELCOME_IPC.state, state)
           }).catch(() => undefined)
         }, (enabled) => { analyticsEnabled = enabled })
+        pushStoredOrbPreferences(host)
       },
       stop: async () => {
         analyticsEnabled = false
@@ -591,17 +664,26 @@ async function main(): Promise<void> {
         try { await host.stop(requireCleanStop) }
         catch (error) {
           if (!requireCleanStop || !(error instanceof DesktopHostUncleanExitError)) throw error
-          // Backend cleanup succeeded; installation still rejects the unsuccessful task teardown.
+
           updateStopFailure = error
+        } finally {
+          restoreOverlayGuard()
         }
       },
       updateTasks: (action: 'inspect' | 'lock' | 'unlock') => host.updateTasks(action),
       inspectQuit: () => host.inspectQuit(),
+      sendOrb: (command: DesktopHostOrbCommand) => { host.sendOrb(command) },
+      sendOrbCodeAgentModel: (selection: OrbAgentModelSelection) => { host.sendOrbCodeAgentModel(selection) },
       resolveDragResource: (address: string, signal?: AbortSignal) => host.resolveDragResource(address, signal),
     }
   }, (state) => {
     if (state.phase === 'error') reportFatal(state.failure, 'host')
     else if (!shuttingDown) backendReady = state.phase === 'ready'
+    if (floatingShell !== undefined && !floatingShell.isDestroyed()) {
+      floatingShell.webContents.send(DESKTOP_IPC.backendState, state.phase === 'error'
+        ? { phase: 'error', message: state.message }
+        : { phase: state.phase })
+    }
   })
 
   const updateErrors = new WeakMap<DesktopUpdateState, Promise<void>>()
@@ -637,12 +719,12 @@ async function main(): Promise<void> {
       shellInstallerOwnsQuit = false
       updateStoppedHost = false
       if (restoreHost) {
-        // Only confirmed process exit permits replacement before another installation confirmation.
+
         const hostReady = backend.start(prepareHostEnvironment)
         startup = hostReady
         const recovery = hostReady.then(async () => {
           if (quitting) return
-          // A replacement Host can have a new port, cookie, or boot injections even at the same URL.
+
           navigation = undefined
           await navigateMain(applicationUrl)
           if (backend.host !== undefined) updateJournal?.action('workspace-ready')
@@ -718,21 +800,21 @@ async function main(): Promise<void> {
         const result = await updateDialog.show(parent, confirmation)
         if (result.response !== 0 || isMandatory()) return false
       }
-      // The update lock rejects new HTTP requests, including analytics intake.
+
       await track('desktop_upgrade_install_restart_click', {})
       if (backend.host !== host) throw new DesktopUpdatePreparationError('tasks-unavailable', locale.messages.updateTasksUnavailable)
       try {
         const stillActive = await host.updateTasks('lock')
         if (stillActive && !active) throw new DesktopUpdatePreparationError('tasks-changed', locale.messages.updateTasksChanged)
         mandatoryUI?.preparingRestart(stillActive)
-        // The embedded Platform document holds credentials issued by the Host that is about to stop.
+
         await platformView.closeAndWait()
         await disposeFileDrag().catch((error: unknown) => { console.error(error) })
         requireCleanStop = true
         updateStopFailure = undefined
         await Promise.all([backend.stop(), stopOperationReports()])
         updateStoppedHost = true
-        // The backend's async cleanup callback can assign this after the reset above.
+
         const stopFailure = updateStopFailure as DesktopHostUncleanExitError | undefined
         if (stopFailure !== undefined) throw new DesktopUpdatePreparationError('stop-failed', locale.messages.updateStopFailed, stopFailure.message)
         await operationJournal?.drain(500)
@@ -770,9 +852,9 @@ async function main(): Promise<void> {
     updateJournal?.action('download-requested')
     const state = await updates.download(version, revision)
     if (state.phase !== 'ready' || quitting) return state
-    // Only a completed user-driven download opens this prompt; cancelling installation does not reopen it.
-    // A confirmation on a hidden window would go unseen, so it waits for the next show; the mandatory
-    // flow keeps its own taskbar and Dock attention instead.
+
+
+
     if (!isMandatory()) await windowShown()
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A quit can begin while the show is awaited.
     if (quitting) return state
@@ -785,15 +867,166 @@ async function main(): Promise<void> {
     window.once('closed', () => { resolve() })
   })
 
+  const tcc = new TccController({
+    platform: process.platform,
+    appName: () => app.name,
+    screenGranted: () => systemPreferences.getMediaAccessStatus('screen') === 'granted',
+    accessibilityGranted: () => systemPreferences.isTrustedAccessibilityClient(false),
+    openExternal: url => shell.openExternal(url),
+  })
+
+  function pushStoredOrbPreferences(host: DesktopHostProcess): void {
+    host.sendOrbCodeAgentModel(readOrbAgentModels(paths.profile).background)
+    host.sendOrb({ type: 'orb-permission', preset: readOrbPermission(paths.profile) })
+    host.sendOrb({
+      type: 'orb-coordinate-mode',
+      mode: orbCoordinateModeFor(readMillifractionCoordinates(paths.profile).enabled),
+    })
+  }
+
+  function publishTcc(): ReturnType<TccController['status']> {
+    const status = tcc.status()
+    if (floatingShell !== undefined && !floatingShell.isDestroyed()) {
+      floatingShell.webContents.send(DESKTOP_IPC.floatingTcc, status)
+    }
+    return status
+  }
+
+  function requestOverlayNewSession(): void {
+    const window = floatingShell
+    if (window === undefined || window.isDestroyed()) return
+    const send = (): void => {
+      if (!window.isDestroyed()) window.webContents.send(DESKTOP_IPC.floatingCreateSession)
+    }
+    if (window.webContents.isLoading()) {
+      window.webContents.once('did-finish-load', send)
+      return
+    }
+    send()
+  }
+
+  function persistOverlayModel(next: OrbAgentModelSelection): void {
+    const current = readOrbAgentModels(paths.profile)
+    writeOrbAgentModels(paths.profile, { overlay: next, background: current.background })
+    if (floatingShell !== undefined && !floatingShell.isDestroyed()) {
+      floatingShell.webContents.send(DESKTOP_IPC.floatingOverlayModel, next)
+    }
+  }
+
+  function persistBackgroundModel(next: OrbAgentModelSelection): void {
+    const current = readOrbAgentModels(paths.profile)
+    writeOrbAgentModels(paths.profile, { overlay: current.overlay, background: next })
+    backend.host?.sendOrbCodeAgentModel(next)
+  }
+
+  function publishAvatar(): void {
+    if (floatingShell === undefined || floatingShell.isDestroyed()) return
+    floatingShell.webContents.send(
+      DESKTOP_IPC.floatingAvatar,
+      orbAvatarUrl('shell', orbAvatarCacheToken(paths.profile)),
+    )
+  }
+
+  function orbSnapshotFor(hostname: string): OrbSettingsSnapshot {
+    const models = readOrbAgentModels(paths.profile)
+    return {
+      supported: orbSettingsSupported(process.platform),
+      avatarUrl: orbAvatarUrl(hostname, orbAvatarCacheToken(paths.profile)),
+      overlay: models.overlay,
+      background: models.background,
+      selectionEnabled: selectionController.enabled(),
+      millifractionEnabled: readMillifractionCoordinates(paths.profile).enabled,
+      tcc: tcc.status(),
+    }
+  }
+
+  async function confirmMillifractionEnabled(
+    enabled: boolean,
+    parent?: BrowserWindow,
+  ): Promise<OrbMillifractionWriteResult> {
+    if (millifractionApplying !== undefined) return millifractionApplying
+    const run = (async (): Promise<OrbMillifractionWriteResult> => {
+      const result = await applyMillifractionCoordinates({
+        requestedEnabled: enabled,
+        currentEnabled: readMillifractionCoordinates(paths.profile).enabled,
+        messages: currentDesktopLocale().messages,
+        dialog: {
+          async show(options) {
+            const box = {
+              type: 'question' as const,
+              title: options.title,
+              message: options.message,
+              detail: options.detail,
+              buttons: [options.confirm, options.cancel],
+              defaultId: 0,
+              cancelId: 1,
+            }
+            const response = parent === undefined
+              ? await dialog.showMessageBox(box)
+              : await dialog.showMessageBox(parent, box)
+            return response.response === 0
+          },
+        },
+        persist: (next) => { writeMillifractionCoordinates(paths.profile, { enabled: next }) },
+        pushHost: (mode) => { backend.host?.sendOrb({ type: 'orb-coordinate-mode', mode }) },
+        createOverlaySession: requestOverlayNewSession,
+      })
+      if (!result.applied) return { cancelled: true }
+      return { cancelled: false, snapshot: orbSnapshotFor('app') }
+    })()
+    millifractionApplying = run
+    try {
+      return await run
+    } finally {
+      millifractionApplying = undefined
+    }
+  }
+
+  async function loadFloatingModelCatalog(): Promise<FloatingModelCatalog | undefined> {
+    if (hostUrl === undefined || hostCookie === undefined) return undefined
+    const rpcId = randomUUID()
+    const response = await net.fetch(new URL('/api/session/modelCatalog', hostUrl).href, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: hostCookie },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId,
+        method: 'session/modelCatalog',
+        payload: { args: {} },
+      }),
+    })
+    if (!response.ok) return undefined
+    const envelope: unknown = await response.json()
+    if (typeof envelope !== 'object' || envelope === null) return undefined
+    const record = envelope as { type?: unknown; rpcId?: unknown; result?: { ok?: unknown; value?: unknown } }
+    if (record.type !== 'server-response' || record.rpcId !== rpcId || record.result?.ok !== true) return undefined
+    const value = record.result.value
+    if (typeof value !== 'object' || value === null || !('groups' in value) || !Array.isArray(value.groups)) return undefined
+    return value as FloatingModelCatalog
+  }
+
   protocol.handle(SCHEME, (request) => {
     const url = new URL(request.url)
+    if (url.pathname === ORB_AVATAR_PATH && (url.hostname === 'shell' || url.hostname === 'app')) {
+      return serveOrbAvatar(
+        paths.profile,
+        join(app.getAppPath(), 'renderer', DEFAULT_ORB_AVATAR_FILE),
+        request.method,
+      )
+    }
+
     // Shell-owned documents live in the application bundle and never pass through the Host.
     if (url.hostname === 'shell') return serveWebDocument(request, join(app.getAppPath(),
       url.pathname === '/design-platform.css' ? 'lib/welcome' : 'renderer'))
     if (url.hostname === 'app') {
+      const webRoot = join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist')
+      if ((url.pathname === '/' || url.pathname === '/index.html') && url.searchParams.get('surface') === 'overlay') {
+        if (injections.length === 0 || hostUrl === undefined) return Promise.resolve(new Response(null, { status: 503 }))
+        return serveOverlayDocument(request, webRoot, injections, new URL(hostUrl).origin)
+      }
       if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname.startsWith('/assets/')
         || ['/favicon.svg', '/manifest.webmanifest'].includes(url.pathname)) {
-        return serveWebDocument(request, join(resources.dsh, 'node_modules', '@deepseek-ai', 'dsh-web-frontend', 'dist'))
+        return serveWebDocument(request, webRoot)
       }
       if (backend.host === undefined || hostUrl === undefined || hostCookie === undefined) {
         return Promise.resolve(new Response(null, { status: 503 }))
@@ -803,8 +1036,360 @@ async function main(): Promise<void> {
     return Promise.resolve(new Response(null, { status: 404 }))
   })
 
+  const shellPreload = fileURLToPath(new URL('./preload.cjs', import.meta.url))
+  const messages = currentDesktopLocale().messages
+  let currentSelectionSession: string | undefined
+  const selectionController = new SelectionToolbarController(paths.profile, {
+    electronPid: process.pid,
+    openExternal: url => shell.openExternal(url),
+    openResult: (action, text, language, anchor) => { selectionAssistant.open(action, text, language, anchor) },
+    promptOverlay(text) {
+      if (floatingShell === undefined || floatingShell.isDestroyed()) return
+      floatingShell.showInactive()
+      floatingShell.webContents.send(DESKTOP_IPC.selectionPrompt, { text })
+      hideSelectionToolbar(selectionController.window())
+    },
+    attachOverlay(text) {
+      if (floatingShell === undefined || floatingShell.isDestroyed()) return
+      floatingShell.show()
+      floatingShell.focus()
+      floatingShell.webContents.send(DESKTOP_IPC.selectionAttach, { text })
+      hideSelectionToolbar(selectionController.window())
+    },
+    requestAccessibility: () => systemPreferences.isTrustedAccessibilityClient(true),
+    accessibilityTrusted: () => systemPreferences.isTrustedAccessibilityClient(false),
+  })
+  const capture = new DesktopCapture(paths.profile, shellPreload, () => currentDesktopLocale().messages)
+  const stopCapture = capture.register(ipcMain)
+  const floatingWindow = floatingShell = createFloatingWindow(shellPreload, messages, () => {
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() }
+  }, () => { app.quit() }, {
+    enabled: () =>  selectionController.enabled(),
+    toggle: () => { selectionController.toggle() },
+  }, {
+    loadCatalog: loadFloatingModelCatalog,
+    overlay: () => readOrbAgentModels(paths.profile).overlay,
+    background: () => readOrbAgentModels(paths.profile).background,
+    onSelectOverlay: persistOverlayModel,
+    onSelectBackground: persistBackgroundModel,
+    selection: () => selectionController.model(),
+    onSelectSelection: (selection) => { selectionController.setModel(selection) },
+  }, {
+    enabled: () => readMillifractionCoordinates(paths.profile).enabled,
+    toggle: () => {
+      const current = readMillifractionCoordinates(paths.profile).enabled
+      void confirmMillifractionEnabled(!current, floatingShell)
+    },
+  }, () => { void capture.open() })
+  floatingWindow.once('ready-to-show', () => { floatingWindow.showInactive() })
+  floatingWindow.on('focus', () => { publishTcc() })
+  void floatingWindow.loadURL(`${SCHEME}://shell/floating.html`)
+  const toolbar = createSelectionToolbarWindow(shellPreload)
+  const selectionAssistant = new SelectionAssistant({
+    profileDir: paths.profile, preload: shellPreload, capture: () => capture.open('video'),
+    messages: () => currentDesktopLocale().messages,
+    currentSessionId: () => currentSelectionSession,
+    compatibilityCopy: () => selectionController.compatibilityCopy(),
+    setCompatibilityCopy: (enabled) => { selectionController.setCompatibilityCopy(enabled) },
+    setLanguage: (language) => { selectionController.setLanguage(language) },
+    model: () => selectionController.model(),
+    setModel: (selection) => { selectionController.setModel(selection) },
+    modelCatalog: loadFloatingModelCatalog,
+    userAgent: () => app.userAgentFallback,
+    openMain: () => { if (mainWindow !== undefined && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() } },
+    transport: {
+      request: async (path, body, signal) => {
+        if (hostUrl === undefined || hostCookie === undefined) throw new Error(currentDesktopLocale().messages.floatingDisconnected)
+        return fetch(new URL(path, hostUrl), { method: 'POST', headers: { 'content-type': 'application/json', cookie: hostCookie }, body,
+          ...(signal === undefined ? {} : { signal }),
+        })
+      },
+    },
+  })
+  const stopSelectionAssistant = selectionAssistant.register(ipcMain)
+  selectionController.setToolbarWindow(toolbar)
+  toolbar.webContents.once('did-finish-load', () => { selectionController.publishState() })
+  void toolbar.loadURL(`${SCHEME}://shell/selection-toolbar.html`)
+  selectionController.start()
+  const ensureObservationFrameWindow = (): void => {
+    if (observationFrameWindow !== undefined && !observationFrameWindow.isDestroyed()) return
+    observationFrameWindow = createObservationFrameWindow()
+    observationFrameWindow.once('closed', () => { observationFrameWindow = undefined })
+    void observationFrameWindow.loadURL(`${SCHEME}://shell/observation-frame.html`)
+  }
+  const blurMainIfFocused = (): void => {
+    const window = mainWindow
+    if (window === undefined || window.isDestroyed() || !window.isFocused()) return
+    window.blur()
+  }
+  restoreOverlayGuard = (): void => {
+    hideObservationFrame(observationFrameWindow)
+    if (!floatingShell.isDestroyed()) resetFloatingOverlayGuard(floatingShell)
+    const toolbarWindow = selectionController.window()
+    if (toolbarWindow !== undefined && !toolbarWindow.isDestroyed()) resetFloatingOverlayGuard(toolbarWindow)
+    selectionController.setHidInput(false)
+  }
+  orbHostHandlers.onOverlayGuard = (event) => {
+    if (floatingShell.isDestroyed()) return []
+    applyFloatingOverlayGuard(floatingShell, event.mode, event.action)
+    const toolbarWindow = selectionController.window()
+    if (toolbarWindow !== undefined && !toolbarWindow.isDestroyed()) {
+      applyFloatingOverlayGuard(toolbarWindow, event.mode, event.action)
+    }
+    if (event.mode === 'input') selectionController.setHidInput(event.action === 'begin')
+    const ids = overlayWindowExcludeIds(floatingShell, toolbarWindow, observationFrameWindow)
+    if (event.mode === 'input' && event.action === 'begin') {
+      blurMainIfFocused()
+      try {
+        selectionController.restoreLastFrontApp()
+      } catch (error: unknown) {
+
+        console.error('dsh desktop: restore front app failed', error)
+      }
+      return overlayGuardInputApplyDelay().then(() => ids)
+    }
+    return ids
+  }
+  orbHostHandlers.onObservationFrame = (event) => {
+    if (event.bounds === null) {
+      hideObservationFrame(observationFrameWindow)
+      return
+    }
+    ensureObservationFrameWindow()
+    if (observationFrameWindow === undefined || observationFrameWindow.isDestroyed()) return
+    showObservationFrame(observationFrameWindow, event.bounds)
+    raiseOverlayAboveObservationFrame(floatingShell, selectionController.window())
+  }
+  orbHostHandlers.onSckCapture = event => captureExcludedRegionOnElectron({
+    region: event.region,
+    excludeWindowIds: event.excludeWindowIds,
+    output: event.output,
+  })
+  const shellSender = (event: IpcMainInvokeEvent): void => {
+    if (event.sender !== floatingWindow.webContents) throw new Error('dsh desktop: rejected floating IPC')
+  }
+  const shellDocumentSender = (event: IpcMainInvokeEvent): void => {
+    if (selectionAssistant.owns(event) || capture.owns(event)) return
+    if (event.sender === floatingWindow.webContents) return
+    const toolbar = selectionController.window()
+    if (toolbar !== undefined && !toolbar.isDestroyed() && event.sender === toolbar.webContents) return
+    throw new Error('dsh desktop: rejected shell IPC')
+  }
+  ipcMain.handle(DESKTOP_IPC.floatingMove, (event, x: unknown, y: unknown, canDock: unknown) => {
+    shellSender(event)
+    if (typeof x !== 'number' || typeof y !== 'number') throw new Error('dsh desktop: invalid floating move')
+    return moveFloatingBall(floatingWindow, x, y, canDock !== false)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingClamp, (event, canDock: unknown) => {
+    shellSender(event)
+    return clampFloatingWindow(floatingWindow, canDock !== false)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingUnsnap, (event) => {
+    shellSender(event)
+    return unsnapDockedBall(floatingWindow)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingSetExpanded, (event, expanded: unknown) => {
+    shellSender(event)
+    return setFloatingExpanded(floatingWindow, expanded === true)
+  })
+  registerFloatingSessionSync(ipcMain, () => mainWindow, floatingWindow, (id) => { currentSelectionSession = id ?? undefined })
+  let followedSession: string | null = null
+  ipcMain.handle(DESKTOP_IPC.floatingFollowSession, (event, sessionId: unknown) => {
+    const mainSender = mainWindow !== undefined && event.sender === mainWindow.webContents && event.senderFrame === event.sender.mainFrame
+    const shellClear = event.sender === floatingWindow.webContents && event.senderFrame === event.sender.mainFrame && sessionId === null
+    if (!mainSender && !shellClear) throw new Error('dsh desktop: rejected project follow IPC')
+    if (sessionId !== null && (typeof sessionId !== 'string' || sessionId.length === 0 || sessionId.length > 256
+      || /[\s\x00-\x08\x0e-\x1f]/.test(sessionId))) throw new Error('dsh desktop: invalid project session')
+    followedSession = sessionId
+    if (!floatingWindow.isDestroyed()) floatingWindow.webContents.send(DESKTOP_IPC.floatingFollowSession, followedSession)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingFollowState, (event) => {
+    shellSender(event)
+    return followedSession
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingSessionGet, (event) => {
+    shellSender(event)
+    return readFloatingSessionId(paths.profile)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingSessionSet, (event, sessionId: unknown) => {
+    shellSender(event)
+    if (typeof sessionId !== 'string' || sessionId === '') throw new Error('dsh desktop: invalid floating session')
+    writeFloatingSessionId(paths.profile, sessionId)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingOverlayModelGet, (event) => {
+    shellSender(event)
+    return readOrbAgentModels(paths.profile).overlay
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingOverlayPermissionGet, (event) => {
+    shellSender(event)
+    return readOrbPermission(paths.profile)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingOrbWorkspace, (event) => {
+    shellSender(event)
+    ensureOrbWorkspaceDir(paths.orbWorkspace)
+    return paths.orbWorkspace
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingFocusMain, (event) => {
+    shellSender(event)
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() }
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingQuit, (event) => {
+    shellSender(event)
+    app.quit()
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingOverlayPermissionSet, (event, preset: unknown, sessionId: unknown) => {
+    shellSender(event)
+    if (!isOrbPermissionPreset(preset)) throw new Error('dsh desktop: overlay permission must be a known Access preset')
+    writeOrbPermission(paths.profile, preset)
+    const id = typeof sessionId === 'string' && sessionId !== '' ? sessionId : undefined
+    backend.host?.sendOrb({ type: 'orb-permission', preset, ...(id === undefined ? {} : { sessionId: id }) })
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingRunning, (event, running: unknown) => {
+    shellSender(event)
+    if (typeof running !== 'boolean') throw new Error('dsh desktop: floating running requires a boolean')
+    selectionController.setSessionRunning(running)
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingEditing, (event, editing: unknown) => {
+    shellSender(event)
+    if (typeof editing !== 'boolean') throw new Error('dsh desktop: floating editing requires a boolean')
+    overlayTextEditing = editing
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingRestoreFront, (event) => {
+    shellSender(event)
+    if (!selectionController.isSessionRunning() || overlayTextEditing) return
+    selectionController.restoreFrontApp()
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingAvatarGet, (event) => {
+    shellSender(event)
+    return orbAvatarUrl('shell', orbAvatarCacheToken(paths.profile))
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingTccGet, (event) => {
+    shellSender(event)
+    return tcc.status()
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingTccOpen, async (event, right: unknown) => {
+    shellSender(event)
+    if (!isTccRight(right)) throw new Error('dsh desktop: TCC right must be screen or accessibility')
+    await tcc.open(right)
+    return publishTcc()
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingTccRelaunch, (event) => {
+    shellSender(event)
+    app.relaunch()
+    app.quit()
+  })
+  ipcMain.handle(DESKTOP_IPC.floatingLocale, (event) => {
+    shellDocumentSender(event)
+    return currentDesktopLocale()
+  })
+  ipcMain.handle(DESKTOP_IPC.backendStatus, (event) => {
+    shellDocumentSender(event)
+    const state = backend.state
+    return state.phase === 'error' ? { phase: 'error', message: state.message } : { phase: state.phase }
+  })
+
+  const requireSelectionToolbar = (event: IpcMainInvokeEvent): SelectionToolbarController => {
+    assertDesktopSender(event, ['shell'])
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (window === null || window !== selectionController.window()) {
+      throw new Error('dsh desktop: rejected selection IPC from an unowned renderer')
+    }
+    return selectionController
+  }
+
+  ipcMain.handle(DESKTOP_IPC.orbSupported, (event) => {
+    assertProductSender(event)
+    return orbSettingsSupported(process.platform)
+  })
+  ipcMain.handle(DESKTOP_IPC.orbSnapshot, (event) => {
+    assertProductSender(event)
+    return orbSnapshotFor('app')
+  })
+  ipcMain.handle(DESKTOP_IPC.orbPickAvatar, async (event) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    const parent = BrowserWindow.fromWebContents(event.sender)
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: ['gif', 'png', 'webp'] }],
+    }
+    const picked = parent === null
+      ? await dialog.showOpenDialog(options)
+      : await dialog.showOpenDialog(parent, options)
+    const filePath = picked.filePaths[0]
+    if (picked.canceled || filePath === undefined) return { ok: false, error: 'cancelled' as const }
+    const installed = installOrbAvatarFromPath(paths.profile, filePath)
+    if (!installed.ok) return installed
+    publishAvatar()
+    return { ok: true as const, snapshot: orbSnapshotFor('app') }
+  })
+  ipcMain.handle(DESKTOP_IPC.orbRestoreAvatar, (event) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    restoreOrbAvatar(paths.profile)
+    publishAvatar()
+    return orbSnapshotFor('app')
+  })
+  ipcMain.handle(DESKTOP_IPC.orbSetOverlayModel, (event, selection: unknown) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    if (!isOrbAgentModelSelection(selection)) throw new Error('dsh desktop: overlay model selection is invalid')
+    persistOverlayModel(selection)
+  })
+  ipcMain.handle(DESKTOP_IPC.orbSetBackgroundModel, (event, selection: unknown) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    if (!isOrbAgentModelSelection(selection)) throw new Error('dsh desktop: background model selection is invalid')
+    persistBackgroundModel(selection)
+  })
+  ipcMain.handle(DESKTOP_IPC.orbSetSelectionEnabled, (event, enabled: unknown) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    if (typeof enabled !== 'boolean') throw new Error('dsh desktop: selection enablement requires a boolean')
+    selectionController.setEnabled(enabled)
+  })
+  ipcMain.handle(DESKTOP_IPC.orbSetMillifractionEnabled, async (event, enabled: unknown) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    if (typeof enabled !== 'boolean') throw new Error('dsh desktop: millifraction enablement requires a boolean')
+    const parent = BrowserWindow.fromWebContents(event.sender)
+    return confirmMillifractionEnabled(enabled, parent === null ? undefined : parent)
+  })
+  ipcMain.handle(DESKTOP_IPC.orbOpenTcc, async (event, right: unknown) => {
+    assertProductSender(event)
+    assertOrbSettingsWritable(process.platform)
+    if (!isTccRight(right)) throw new Error('dsh desktop: TCC right must be screen or accessibility')
+    await tcc.open(right)
+    publishTcc()
+    return orbSnapshotFor('app')
+  })
+  ipcMain.handle(DESKTOP_IPC.selectionSearch, event => requireSelectionToolbar(event).search())
+  ipcMain.handle(DESKTOP_IPC.selectionTranslate, (event) => { requireSelectionToolbar(event).translate() })
+  ipcMain.handle(DESKTOP_IPC.selectionAction, (event, action: unknown) => {
+    if (action !== 'translate' && action !== 'explain' && action !== 'note' && action !== 'wechat') throw new Error('Invalid selection action')
+    requireSelectionToolbar(event).openResult(action)
+  })
+  ipcMain.handle(DESKTOP_IPC.selectionAttach, (event) => { requireSelectionToolbar(event).sendToAgent() })
+  ipcMain.handle(DESKTOP_IPC.selectionSetLanguage, (event, language: unknown) => {
+    if (!isSelectionLanguage(language)) throw new Error('dsh desktop: invalid translate language')
+    requireSelectionToolbar(event).setLanguage(language)
+  })
+  ipcMain.handle(DESKTOP_IPC.selectionInteract, (event) => { requireSelectionToolbar(event) })
+  ipcMain.handle(DESKTOP_IPC.selectionSetContentSize, (event, size: unknown) => {
+    if (typeof size !== 'object' || size === null || Array.isArray(size)) {
+      throw new Error('dsh desktop: toolbar size requires width and height')
+    }
+    const record = size as { width?: unknown; height?: unknown }
+    if (typeof record.width !== 'number' || typeof record.height !== 'number'
+      || !Number.isFinite(record.width) || !Number.isFinite(record.height)
+      || record.width < 1 || record.height < 1) {
+      throw new Error('dsh desktop: toolbar size requires positive finite dimensions')
+    }
+    return requireSelectionToolbar(event).setContentSize(record.width, record.height)
+  })
+
   installDesktopDirectoryPicker(() => mainWindow)
-  installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents)
+  installMicrophonePermissions(session.defaultSession, () => mainWindow?.webContents, contents => capture.allowsDisplayMedia(contents))
   const shortcuts = installDesktopShortcuts(() => mainWindow, app.getPath('userData'),
     process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux', () => { refreshApplicationMenu() }, window => updateOverlays.input(window))
   app.on('will-quit', () => { shortcuts.dispose() })
@@ -835,7 +1420,9 @@ async function main(): Promise<void> {
   })
 
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['ws://127.0.0.1/*', 'wss://127.0.0.1/*'] }, (details, callback) => {
-    if (hostUrl === undefined || hostCookie === undefined || details.webContentsId !== mainWindow?.webContents.id) {
+    const ownedWebContents = details.webContentsId === mainWindow?.webContents.id
+      || details.webContentsId === floatingShell.webContents.id
+    if (hostUrl === undefined || hostCookie === undefined || !ownedWebContents) {
       callback({})
       return
     }
@@ -868,7 +1455,7 @@ async function main(): Promise<void> {
     platformView.setBounds(platformBounds(bounds))
   })
   ipcMain.handle(PLATFORM_IPC.close, (event) => { assertMainApplication(event); platformView.close() })
-  // Only the main window may synchronize its palette with the native material.
+
   ipcMain.on(DESKTOP_IPC.nativeThemeSet, (event, source: unknown) => {
     if (mainWindow === undefined || event.sender !== mainWindow.webContents) return
     if (source === 'light' || source === 'dark' || source === 'system') nativeTheme.themeSource = source
@@ -1102,7 +1689,7 @@ async function main(): Promise<void> {
         message: locale.messages.policyLoginFailed, buttons: [locale.messages.updateAcknowledge], cancelId: 0 })
       return undefined
     }
-    // Drain a pre-login request before asking the server to evaluate the new cookies.
+
     await mandatoryPolicy.check('login-return')
     if (isQuitting()) return undefined
     return mandatoryPolicy.check('login-return', true)
@@ -1133,14 +1720,14 @@ async function main(): Promise<void> {
   app.setAboutPanelOptions({
     applicationName: 'DeepSeek Harness',
     applicationVersion: app.getVersion(),
-    // The release has no separate build number; omit Electron's bundle version.
+
     version: '',
     copyright: '',
     iconPath: applicationIconPath,
   })
-  // A custom application menu replaces Electron's default menu, so macOS needs
-  // its standard menus and application hide commands declared explicitly.
-  // Keep app.name stable: Electron derives its default userData directory from it.
+
+
+
   const darwin = process.platform === 'darwin'
   // A copy of Electron 44's macOS Edit menu that binds Paste and Match Style to Shift+Command+V
   // (#7782) and keeps Electron's Option+Shift+Command+V as a hidden alias.
@@ -1174,8 +1761,8 @@ async function main(): Promise<void> {
       { role: 'unhide', label: currentDesktopLocale().messages.showAllApplications }, { type: 'separator' }]
     : []
   const applicationItems = (): MenuItemConstructorOptions[] => [
-    // Windows has no system About panel; Electron's fallback is a plain
-    // message box, so the shell shows its own dimmed dialog instead.
+
+
     process.platform === 'win32'
       ? { label: currentDesktopLocale().messages.aboutMenu,
         click: () => { void showAbout().catch((error: unknown) => { console.error(error) }) } }
@@ -1215,7 +1802,7 @@ async function main(): Promise<void> {
   refreshApplicationMenu()
   const trayIconPath = development ? join(app.getAppPath(), 'resources', 'tray-windows.ico') : join(process.resourcesPath, 'tray.ico')
   if (process.platform === 'win32') {
-    // The tray is the way back to a hidden window; without it, relaunching the application still focuses it.
+
     try {
       tray = new DesktopTray({ iconPath: trayIconPath, locale: currentDesktopLocale,
         open: () => { focusPrimaryWindow() }, quit: () => { app.quit() } })
@@ -1228,13 +1815,13 @@ async function main(): Promise<void> {
   const quitConfirmation = new DesktopQuitConfirmation({
     locale: () => locale,
     inspect: () => backend.host?.inspectQuit(),
-    // No owner window: a hidden window stays hidden and the native box is its own top-level window.
+
     show: options => dialog.showMessageBox(options),
-    // macOS raises the open alert with the application; Electron exposes no handle to the Windows task
-    // dialog, so a repeated request there only joins the open decision.
+
+
     focus: () => { if (process.platform === 'darwin') app.focus({ steal: true }) },
-    // The task dialog draws its main icon at the system icon size; the multi-size ICO yields that
-    // size directly, where the 1024 px PNG would be scaled down by GDI.
+
+
     ...(process.platform === 'win32' ? { icon: nativeImage.createFromPath(trayIconPath) } : {}),
   })
 
@@ -1247,7 +1834,7 @@ async function main(): Promise<void> {
         || typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)
         || x < 0 || y < 0 || x > 100_000 || y > 100_000) throw new Error('desktop menu: invalid popup request')
       const window = mainWindow
-      // Editor-owned history listens to key events rather than Chromium's native undo stack.
+
       const editItem = (label: string, keyCode: string, modifiers: Array<'control'>, accelerator?: string): MenuItemConstructorOptions => ({
         label,
         ...(accelerator === undefined ? {} : { accelerator }),
@@ -1285,7 +1872,7 @@ async function main(): Promise<void> {
 
   const hideMainWindow = (window: BrowserWindow): void => {
     if (process.platform === 'darwin' && window.isFullScreen()) {
-      // Hiding a fullscreen window leaves an empty black space; leave fullscreen first.
+
       window.once('leave-full-screen', () => { if (!window.isDestroyed()) window.hide() })
       window.setFullScreen(false)
     } else {
@@ -1298,7 +1885,7 @@ async function main(): Promise<void> {
     browserGuests.bind(window, (guest, name) => shortcuts.attachGuest(window, guest, name))
     shortcuts.attach(window)
     window.on('focus', automaticCheck)
-    // Closing hides: the page and the Host keep running, and the next show resumes the same document.
+
     window.on('close', (event) => {
       if (quitting || shellInstallerOwnsQuit || sessionEnding) return
       event.preventDefault()
@@ -1310,12 +1897,12 @@ async function main(): Promise<void> {
       else backgroundNotice.close(hide)
     })
     if (process.platform === 'win32') {
-      // Shutdown, restart, and log-off must not wait on a confirmation. query-session-end is only a
-      // question that another application can veto without any follow-up message, so it does not count.
+
+
       window.on('session-end', () => { sessionEnding = true })
     } else {
-      // The macOS power-off notification arrives before the terminate request; a cancelled shutdown
-      // leaves the process running, and user attention on the window shows the session continues.
+
+
       window.on('focus', () => { sessionEnding = false })
       window.on('show', () => { sessionEnding = false })
     }
@@ -1414,8 +2001,8 @@ async function main(): Promise<void> {
       window.once('closed', () => {
         if (welcomeWindow === window) welcomeWindow = undefined
         if (enteredWorkspace || recovery.active) return
-        // Nothing runs before the workspace opens. macOS keeps the Dock convention and drops the
-        // unused main window so the next activation rebuilds the welcome; elsewhere the close quits.
+
+
         if (process.platform === 'darwin') mainWindow?.destroy()
         else app.quit()
       })
@@ -1433,7 +2020,7 @@ async function main(): Promise<void> {
     windowsLanguage = locale.id
     refreshApplicationMenu()
     if (!enteredWorkspace && needsWelcome({ loggedIn: state.loggedIn, hasApiKey: state.hasApiKey })) {
-      // A later login must retain its own activation policy instead of replaying startup focus.
+
       raiseAfterUpdate = false
       await showWelcome()
     } else {
@@ -1449,7 +2036,7 @@ async function main(): Promise<void> {
       void (backend.state.phase === 'ready' ? openInitialWindow() : navigateMain(applicationUrl)).catch((error: unknown) => { reportFatal(error, 'main') })
       return
     }
-    // Startup and sign-out select the visible window before activation may reveal the workspace.
+
     if (window === mainWindow && !enteredWorkspace) return
     if (window.isMinimized()) window.restore()
     window.show()
@@ -1464,6 +2051,10 @@ async function main(): Promise<void> {
 
   app.on('activate', (_event, hasVisibleWindows) => {
     if (!hasVisibleWindows) focusPrimaryWindow()
+    if (!pointInWindow(floatingShell, screen.getCursorScreenPoint())) return
+    if (!selectionController.isSessionRunning() || overlayTextEditing) return
+    blurMainIfFocused()
+    selectionController.restoreLastFrontApp()
   })
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()
@@ -1471,11 +2062,14 @@ async function main(): Promise<void> {
   if (process.platform !== 'win32') powerMonitor.on('shutdown', () => { sessionEnding = true })
   const finishQuit = (): void => {
     quitting = true
+    platformAccess.dispose()
     shuttingDown = true
     updateJournal?.action('quit-requested')
     quitConfirmation.dispose()
     backgroundNotice?.dispose()
     tray?.dispose()
+    selectionController.stop()
+    const selectionCleanup = Promise.all([stopSelectionAssistant(), stopCapture()])
     stopAccount?.()
     if (welcomeWindow !== undefined && !welcomeWindow.isDestroyed()) welcomeWindow.hide()
     if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.hide()
@@ -1483,7 +2077,7 @@ async function main(): Promise<void> {
     updateDialog.dispose()
     mandatoryUI?.dispose()
     void Promise.all([stopOperationReports(), Promise.resolve(mandatoryPolicy?.dispose()).then(() => policyAuth?.dispose()),
-      backend.close().then(async () => { await operationJournal?.drain(500) }, async (error: unknown) => {
+      selectionCleanup.then(() => backend.close()).then(async () => { await operationJournal?.drain(500) }, async (error: unknown) => {
         await operationJournal?.drain(500)
         throw error
       }),
@@ -1495,13 +2089,14 @@ async function main(): Promise<void> {
   app.on('before-quit', (event) => {
     if (shellInstallerOwnsQuit) {
       shuttingDown = true
+      platformAccess.dispose()
       quitConfirmation.dispose()
       backgroundNotice?.dispose()
       updateJournal?.action('quit-requested')
       tray?.dispose()
       updateDialog.dispose()
       mandatoryUI?.dispose()
-      // Installation preparation already awaited Platform storage cleanup.
+
       void platformView.dispose().catch((error: unknown) => { console.error(error) })
       return
     }
@@ -1511,7 +2106,7 @@ async function main(): Promise<void> {
     void quitConfirmation.confirm().then((approved) => {
       if (quitting || shellInstallerOwnsQuit) return
       if (approved) { finishQuit(); return }
-      // A quit that started from closing the welcome window destroyed it; a cancelled quit needs it back.
+
       if (!enteredWorkspace && !recovery.active) void showWelcome().catch((error: unknown) => { reportFatal(error, 'main') })
     }).catch((error: unknown) => { console.error(error); if (!quitting && !shellInstallerOwnsQuit) finishQuit() })
   })
@@ -1563,7 +2158,7 @@ async function main(): Promise<void> {
   }
   automaticCheck()
   await reconcileBackend().catch(() => undefined)
-  // Window lifecycle callbacks run while backend startup is pending.
+
   if (isQuitting()) return
   const window = currentMainWindow()
   if (window !== undefined && development && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {

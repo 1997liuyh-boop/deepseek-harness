@@ -107,9 +107,9 @@ describe('SessionController subagent catalog', () => {
     await expect(controller.projections({ sessionId: PARENT }, signal)).resolves.toMatchObject({
       kind: 'sequenced', values: { subagentCatalog: [{ id: CHILD, mode: 'continuable', label: 'worker' }] },
     })
-    expect(stat).toHaveBeenCalledWith(PARENT, { signal })
-    expect(observe).toHaveBeenCalledWith(PARENT, { signal, projectionMode: 'all' })
-    expect(open).toHaveBeenCalledWith(PARENT, 'read', { signal })
+    expect(stat).toHaveBeenCalledWith(PARENT, { signal: expect.any(AbortSignal) as AbortSignal })
+    expect(observe).toHaveBeenCalledWith(PARENT, { signal: expect.any(AbortSignal) as AbortSignal, projectionMode: 'all' })
+    expect(open).toHaveBeenCalledWith(PARENT, 'read', { signal: expect.any(AbortSignal) as AbortSignal })
     expect(resume).not.toHaveBeenCalled()
     expect(ctx.sessions.get(PARENT)).toBeUndefined()
     expect(ctx.agents.get(PARENT)).toBeUndefined()

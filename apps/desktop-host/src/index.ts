@@ -1,6 +1,7 @@
-/** Launch the Desktop profile through the Web application and report its URL to Electron. */
+
 
 import { delimiter, join } from 'node:path'
+import { desktopInstallAnchor } from './runtime-installation.ts'
 import { randomUUID } from 'node:crypto'
 import type { PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
 import { formatFatalDiagnostic } from './fatal-diagnostic.ts'
@@ -16,7 +17,24 @@ import { localDragResource } from './file-drag.ts'
 import { installDesktopUpdateTaskControl } from './update-tasks.ts'
 import { installDesktopQuitInspection } from './quit-inspection.ts'
 import { installPlatformSessionPublisher } from './platform-session.ts'
+import { installPlatformAccess } from './platform-access.ts'
 import { installOfficeEngineResolution } from './office-engine.ts'
+import {
+  clearOverlayGuardTransport,
+  completeObservationFrameAck,
+  completeOverlayGuardAck,
+  completeSckCaptureAck,
+  setOverlayGuardTransport,
+} from './computer-use-overlay-guard.ts'
+import * as computerUseOverlayGuard from './computer-use-overlay-guard.ts'
+import * as computerUseOrbPermission from './computer-use-orb-permission.ts'
+import { setOrbPermissionPreset, isOrbPermissionPreset } from './computer-use-orb-permission.ts'
+import * as computerUseOrbCoordinateMode from './computer-use-orb-coordinate-mode.ts'
+import { setOrbCoordinateMode } from './computer-use-orb-coordinate-mode.ts'
+import * as computerUseOrbCodeAgentModel from './computer-use-orb-code-agent-model.ts'
+import { setOrbCodeAgentModelSelection } from './computer-use-orb-code-agent-model.ts'
+import { existsSync } from 'node:fs'
+import { registerDesktopRemoteStream } from './remote-stream-route.ts'
 import { installOperationDiagnostics } from './operation-diagnostics.ts'
 
 async function main(): Promise<void> {
@@ -25,14 +43,14 @@ async function main(): Promise<void> {
   const runtimeDir = process.argv[2] as string
   const projectDir = process.argv[3] as string
   installOfficeEngineResolution(runtimeDir)
-  const installAnchor = join(runtimeDir, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')
+  const installAnchor = desktopInstallAnchor
   const profile = loadProfileDirectory('dsh', projectDir, installAnchor)
   reportSkippedBundles('dsh', profile)
   const application = runProfile({
     environment: loadLayeredEnv('dsh'),
     profile: 'desktop',
     resolvedProfile: { profile, installAnchor },
-    patchFiles: [],
+    patchFiles: existsSync(process.env.DSH_COMPUTER_USE_PATCH ?? '') ? [process.env.DSH_COMPUTER_USE_PATCH as string] : [],
     args: ['--no-open', '--host', '127.0.0.1', '--port', '0'],
     ...(process.argv[5] === undefined ? {} : {
       packageManager: {
@@ -52,12 +70,15 @@ async function main(): Promise<void> {
   const control: {
     updateTasks?: ReturnType<typeof installDesktopUpdateTaskControl>
     quitInspection?: ReturnType<typeof installDesktopQuitInspection>
+    platformAccess?: ReturnType<typeof installPlatformAccess>
   } = {}
   const send = (message: object): Promise<void> => new Promise((resolve, reject) => {
     if (!process.connected || process.send === undefined) { resolve(); return }
     process.send(message, (error) => { if (error === null) resolve(); else reject(error) })
   })
   const stop = (): Promise<void> => stopping ??= (async () => {
+
+    clearOverlayGuardTransport(new Error('dsh desktop: Host is stopping'))
     for (const abort of dragReads.values()) abort.abort()
     await Promise.allSettled(dragTasks)
     // Startup failure is reported by main; shutdown only owns a tree that booted.
@@ -69,7 +90,9 @@ async function main(): Promise<void> {
     // deadline; a startup failure keeps its own diagnostic exit.
     if (running !== undefined) process.exit()
   })()
+  setOverlayGuardTransport((event) => { void send(event) })
   process.on('message', (message: unknown) => {
+    if (control.platformAccess?.(message)) return
     if (typeof message !== 'object' || message === null || !('type' in message)) return
     if (message.type === 'shutdown') { void stop(); return }
     if (message.type === 'file-drag-cancel') {
@@ -106,11 +129,43 @@ async function main(): Promise<void> {
           const inspection = await control.quitInspection()
           await send({ type: 'quit-inspection', requestId, ...inspection })
         } catch (error) {
-          // The shell treats an unknown state as interruptible work and asks before quitting.
+
           await send({ type: 'quit-inspection', requestId, activeTasks: true, scheduledTasks: false,
             error: error instanceof Error ? error.message : String(error) })
         }
       })().catch((error: unknown) => { console.error(error) })
+      return
+    }
+    if (message.type === 'overlay-guard-ack' && 'requestId' in message && typeof message.requestId === 'number') {
+      const ids = 'excludeWindowIds' in message && Array.isArray(message.excludeWindowIds)
+        ? message.excludeWindowIds.filter((id): id is number => typeof id === 'number')
+        : []
+      completeOverlayGuardAck(message.requestId, ids)
+      return
+    }
+    if (message.type === 'observation-frame-ack' && 'requestId' in message && typeof message.requestId === 'number') {
+      completeObservationFrameAck(message.requestId)
+      return
+    }
+    if (message.type === 'sck-capture-ack' && 'requestId' in message && typeof message.requestId === 'number') {
+      completeSckCaptureAck(message.requestId, 'error' in message && typeof message.error === 'string' ? message.error : undefined)
+      return
+    }
+    if (message.type === 'orb-permission' && 'preset' in message && isOrbPermissionPreset(message.preset)) {
+      setOrbPermissionPreset(message.preset, 'sessionId' in message && typeof message.sessionId === 'string' ? message.sessionId : undefined)
+      return
+    }
+    if (message.type === 'orb-coordinate-mode' && 'mode' in message && (message.mode === 'millifraction' || message.mode === 'pixel')) {
+      setOrbCoordinateMode(message.mode)
+      return
+    }
+    if (message.type === 'orb-code-agent-model' && 'provider' in message && 'model' in message
+      && typeof message.provider === 'string' && typeof message.model === 'string') {
+      setOrbCodeAgentModelSelection({
+        provider: message.provider,
+        model: message.model,
+        ...('reasoningEffort' in message && typeof message.reasoningEffort === 'string' ? { reasoningEffort: message.reasoningEffort } : {}),
+      })
       return
     }
     if (message.type !== 'update-tasks' || !('requestId' in message) || !Number.isSafeInteger(message.requestId)
@@ -128,6 +183,12 @@ async function main(): Promise<void> {
   })
   process.once('disconnect', () => { void stop() })
   const { ctx } = await application
+  control.platformAccess = installPlatformAccess(ctx, send)
+  registerDesktopRemoteStream(ctx)
+  await ctx.plugin(computerUseOverlayGuard)
+  await ctx.plugin(computerUseOrbPermission)
+  await ctx.plugin(computerUseOrbCoordinateMode)
+  await ctx.plugin(computerUseOrbCodeAgentModel)
   installOperationDiagnostics(ctx, record => send({ type: 'plugin-operation', record }), 32, runId)
   control.updateTasks = installDesktopUpdateTaskControl(ctx)
   control.quitInspection = installDesktopQuitInspection(ctx)

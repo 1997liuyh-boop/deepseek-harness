@@ -276,20 +276,36 @@ export class SqliteSessionQueryEngine extends SessionQueryEngine {
       await this._ensureReady(signal)
       const persistenceBinding = await this._reconcile(signal)
       assertNotAborted(signal)
-      const generation = String(this._globalGeneration)
+      const generation = `${this._globalGeneration}:${this.ctx.sessions.access.revision}`
       const fingerprint = requestFingerprint(normalized)
       const offset = normalized.cursor === undefined
         ? 0
         : decodeCursor(normalized.cursor, this._instance, 'sessions', fingerprint, generation)
-      const rows = this._querySessions(normalized, offset, persistenceBinding)
-      return page(rows, normalized.limit, row => this._sessionHit(row), cursorOffset => encodeCursor({
+      const visible: SearchRow[] = []
+      let scanned = offset
+      let cursorOffset = offset
+      while (visible.length <= normalized.limit) {
+        assertNotAborted(signal)
+        const rows = this._querySessions(normalized, scanned, persistenceBinding)
+        for (const row of rows) {
+          scanned += 1
+          if (!this.ctx.sessions.access.allows(row.session_id as SessionId)) continue
+          visible.push(row)
+          if (visible.length === normalized.limit) cursorOffset = scanned
+          if (visible.length > normalized.limit) break
+        }
+        if (rows.length <= normalized.limit) break
+      }
+      const nextCursor = encodeCursor({
         version: 1,
         instance: this._instance,
         scope: 'sessions',
         fingerprint,
         generation,
         offset: cursorOffset,
-      }), offset)
+      })
+      return { items: visible.slice(0, normalized.limit).map(row => this._sessionHit(row)),
+        ...visible.length > normalized.limit ? { nextCursor } : {} }
     })
   }
 
@@ -305,6 +321,7 @@ export class SqliteSessionQueryEngine extends SessionQueryEngine {
       const persistenceBinding = await this._reconcile(signal)
       assertNotAborted(signal)
       const target = this._targetObservation(normalized.sessionId, persistenceBinding)
+      this.ctx.sessions.access.assert(normalized.sessionId)
       const fingerprint = requestFingerprint(normalized)
       const offset = normalized.cursor === undefined
         ? 0

@@ -50,3 +50,6 @@
 /llm-streaming/service-and-provider-contracts:
   en: 8dc79d4cc82824c2
   zh: 3ebabd3a117ad717
+/llm-streaming/model-routing-policy:
+  en: 230923a237bbc404
+  zh: 40916b3288432513

@@ -239,8 +239,10 @@ describe('Session projection discovery', () => {
       kind: 'sequenced', asOfSeq: 0,
       values: { subagentCatalog: [{ id: 'current-child', mode: 'continuable', label: 'worker' }] },
     })
-    expect(observe).toHaveBeenCalledWith(parent.header.id, { signal, projectionMode: 'all' })
-    expect(open).toHaveBeenCalledWith(parent.header.id, 'read', { signal })
+    expect(observe).toHaveBeenCalledWith(parent.header.id, { signal: expect.any(AbortSignal) as AbortSignal, projectionMode: 'all' })
+    expect(open).toHaveBeenCalledWith(parent.header.id, 'read', { signal: expect.any(AbortSignal) as AbortSignal })
+    fixture.ctx.sessions.access.invalidate()
+    expect(open.mock.calls.at(-1)?.[2]?.signal?.aborted).toBe(true)
     expect(fixture.ctx.sessions.get(parent.header.id)).toBeUndefined()
     expect(fixture.ctx.agents.get(parent.header.id)).toBeUndefined()
   })

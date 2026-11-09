@@ -1,0 +1,12 @@
+{
+  "final_response": "Recovered.",
+  "finish_reason": "completed",
+  "routes": [
+    { "provider": "deepseek-official", "model": "deepseek-v4-flash" },
+    { "provider": "deepseek-messages", "model": "deepseek-v4-pro" }
+  ],
+  "retry_events": ["llm/retry", "llm/retry-started"],
+  "assistant_sources": [
+    { "kind": "model", "provider": "deepseek-messages", "model": "deepseek-v4-pro" }
+  ]
+}

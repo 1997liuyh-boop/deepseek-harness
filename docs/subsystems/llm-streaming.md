@@ -979,6 +979,40 @@ declare abstract class LlmAdapter {
 
 `ContentBlockType` (the key set the `index`-correlated blocks carry) derives from [`ContentBlockMap`](#content-blocks-and-messages) above.
 
+## Model routing policy
+
+[`llm-routing`](../../packages/llm/llm-routing/README.md) shares these settings between the routing service, session API and Models settings. Each route names an existing provider/model pair; `RoutingPolicy` defines the ordered candidates and recovery limits.
+
+Source: [`packages/llm/llm-routing/src/types.ts`](../../packages/llm/llm-routing/src/types.ts)
+
+```ts type-equiv
+/** 一个明确的供应商与模型配对。 */
+interface Route {
+  /** 已注册的真实供应商标识。 */
+  provider: string
+  /** 该供应商中的明确模型标识。 */
+  model: string
+}
+```
+
+```ts type-equiv
+/** 一次请求恢复期间保持不变的路由配置。 */
+interface RoutingPolicy {
+  /** 直连或按候选队列顺序恢复。 */
+  mode: 'direct' | 'aggregate'
+  /** 默认项之后按此顺序尝试其他候选。 */
+  routes: readonly Route[]
+  /** 默认候选在队列中的下标。 */
+  defaultIndex: number
+  /** 每个候选的额外重试次数。 */
+  retriesPerRoute: number
+  /** 每次恢复前的最短等待毫秒数。 */
+  delayMs: number
+  /** 一次步骤恢复的总调度预算，单位毫秒。 */
+  budgetMs: number
+}
+```
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -1187,6 +1221,36 @@ Types: [FileAttachmentRef](attachment.md) · [ImageAttachmentRef](attachment.md)
 
 Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
 
+<a id="ctxllmrouting--llmrouting"></a>
+
+### `ctx.llmRouting` — `LlmRouting`
+
+在模型组装与失败恢复扩展点执行路由，不共享官方凭据。
+
+```ts cordis-catalog
+/**
+ * 读取当前路由配置。
+ * @returns 当前完整策略的独立副本。
+ */
+describe(): RoutingPolicy
+
+/**
+ * 校验并持久化路由策略。
+ * @param policy - 用户编辑的完整策略。
+ * @returns 持久化完成后的策略。
+ */
+async save(policy: RoutingPolicy): Promise<RoutingPolicy>
+
+/**
+ * 验证设置中引用的路由，保留错误供用户修正。
+ * @param policy - 待保存策略。
+ * @returns 所有明确模型存在时完成。
+ */
+async validate(policy: RoutingPolicy): Promise<void>
+```
+
+Source: [`packages/llm/llm-routing/src/index.ts`](../../packages/llm/llm-routing/src/index.ts)
+
 <a id="llm-events"></a>
 
 ### `llm/*` events
@@ -1249,6 +1313,26 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
  * @mode waterfall
  */
 'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
+```
+
+Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)
+
+<a id="llmvalidate-input--waterfall"></a>
+
+#### `llm/validate-input` — waterfall
+
+在输入投影前检查已捕获的模型能力；错误转换成请求失败，不另行解析模型。
+
+```ts cordis-catalog
+/**
+ * 在输入投影前检查已捕获的模型能力；错误转换成请求失败，不另行解析模型。
+ * @param options - 本次请求。
+ * @param model - 与实际派发绑定的模型元数据。
+ * @param next - 委派后续输入检查。
+ * @returns 检查完成时兑现。
+ * @mode waterfall
+ */
+'llm/validate-input'(this: LlmRuntime, options: GenerateOptions, model: Readonly<LlmResolvedModelInfo>, next: () => Promise<void>): Promise<void>
 ```
 
 Source: [`packages/llm/llm/src/index.ts`](../../packages/llm/llm/src/index.ts)

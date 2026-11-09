@@ -184,6 +184,9 @@ async function sessionLogExportResponse(
     return new Response('missing or invalid sessionId query parameter', { status: 400 })
   }
   const sessionId = brandString<SessionId>(sessionIdValue)
+  const sessions = ctx.get('sessions')
+  if (sessions !== undefined && !sessions.access.allows(sessionId)) return new Response('session unavailable', { status: 404 })
+  const signal = sessions === undefined ? request.signal : AbortSignal.any([request.signal, sessions.access.signal])
   const deps = sessionLogExportDeps(ctx)
   if (deps.sessionQuery === undefined
     || deps.sessionPersistence === undefined
@@ -201,11 +204,11 @@ async function sessionLogExportResponse(
   }
   let rootContent: string | undefined
   try {
-    await flushLiveSessionLog(deps, sessionId, request.signal)
-    rootContent = await readSessionLogText(deps.sessionPersistence, sessionId, request.signal)
-    request.signal.throwIfAborted()
+    await flushLiveSessionLog(deps, sessionId, signal)
+    rootContent = await readSessionLogText(deps.sessionPersistence, sessionId, signal)
+    signal.throwIfAborted()
   } catch {
-    request.signal.throwIfAborted()
+    signal.throwIfAborted()
     // Root preparation failure (flush, open, or read): answer 500 without
     // echoing the error, which may carry absolute host paths into the
     // browser error bar.
@@ -221,7 +224,7 @@ async function sessionLogExportResponse(
       sessionId,
       descendantsValue === 'true',
       compressionLevel,
-      request.signal,
+      signal,
     ),
     {
       headers: {

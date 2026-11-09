@@ -1,4 +1,4 @@
-/** Client Session object layer, Agent scopes, and Remote lifecycle wiring. */
+
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent/types'
@@ -26,6 +26,23 @@ export type {
 } from './transport.ts'
 export { createScope, scopeOf } from './scope.ts'
 export type { AgentContext, AgentScopeHandle } from './scope.ts'
+export {
+  OVERLAY_APP_ORIGIN,
+  OVERLAY_CLIENT_SURFACE,
+  OVERLAY_INDEX_HREF,
+  OVERLAY_READY_MESSAGE_TYPE,
+  OVERLAY_SESSION_MESSAGE_TYPE,
+  OVERLAY_SESSIONS_CURRENT_PERSIST,
+  OVERLAY_SHELL_ORIGIN,
+  OVERLAY_THEME_MESSAGE_TYPE,
+  SESSIONS_CURRENT_PERSIST,
+  overlayClientSurface,
+  overlaySessionId,
+  overlaySessionMessage,
+  overlayThemeMessage,
+  sessionsSelectionPersistName,
+} from './overlay-surface.ts'
+export type { OverlayClientBridge, OverlaySessionMessage, OverlayThemeMessage } from './overlay-surface.ts'
 export { SessionCreateError, SessionForkError } from './sessions/service.ts'
 export type { SessionBinding, SessionListState, SessionSummary } from './sessions/service.ts'
 export type {
@@ -76,25 +93,27 @@ export type {
   SessionSnapshot,
 } from './contract/snapshot.ts'
 
+
 /** Consumer-owned reference labels; extend this map through the package's canonical /client entry. */
 export interface SessionReferenceSourceMap {
-  /** Temporary Client Controller work, including fork-title preparation. */
+
   controllerOperation: unknown
-  /** A Client Gateway invocation's synchronous Context ownership. */
+
   gateway: unknown
 }
+
 
 /** Declaration-merge-extensible labels carried by independent Client references. */
 export type SessionReferenceSource = Extract<keyof SessionReferenceSourceMap, string>
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Client Session object layer and Agent scope owner. */
+
     sessions: import('./contract/sessions.ts').ISessions
   }
 }
 
-/** Required Remote and Context projection services. */
+
 export const inject = [
   'connection',
   'fileUpload',
@@ -105,14 +124,15 @@ export const inject = [
   'remote.subagents',
 ]
 
-/**
- * Install Client Session state and its reconnecting control stream.
- * @param ctx - Client Cordis context.
- */
+
+
+
+
 export function apply(ctx: Context): void {
   const remotes = ctx.remote as unknown as SessionRemotes
   const connection = ctx.get('connection') as ConnectionHandle
   const sessions = new ClientSessions(ctx, remotes)
+  ctx.remote.$on('session/access-changed', () => { sessions.handleLibraryChanged() })
   ctx.remote.$on('api-session/added', (summary) => { sessions.handleSessionAdded(summary) })
   ctx.remote.$on('api-session/removed', (sessionId) => { sessions.handleSessionRemoved(sessionId) })
   ctx.remote.$on('api-session/status', (sessionId, running) => {
@@ -131,7 +151,7 @@ export function apply(ctx: Context): void {
   })
   const connected = (): void => {
     if (connection.generation.getSnapshot() === undefined) return
-    // A ready control baseline may arrive before Cordis delivers connection/reset.
+
     sessions.handleConnected()
     control.restart()
     control.start()

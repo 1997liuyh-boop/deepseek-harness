@@ -9,8 +9,50 @@
   en: 6cc2cd9ced70bb09
   zh: 1c0e6cb4ba2ed637
 /tool-schema-catalog/tool-package-map:
-  en: 7b5b99bcc5cd46f4
-  zh: c1697f88326440ff
+  en: b2f91275c6b8f5b4
+  zh: 0d88ac1be9395367
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use:
+  en: 6b7ef6eb08784a06
+  zh: 6b7ef6eb08784a06
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/click:
+  en: 1f480cd0c6a18ed6
+  zh: 50fc460668e0b67f
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/drag:
+  en: 5298058b88801a8d
+  zh: bd29e6c83b6b86a1
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/hotkey:
+  en: 531654e02e126cab
+  zh: e3ba9777c77b6b39
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/input-text:
+  en: b497279847f1b1f1
+  zh: 9e7ef3a06b81f3ae
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/list-apps:
+  en: 96d060b45db614bb
+  zh: 5d572934f2c1e081
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/long-press:
+  en: c0bb02917288a753
+  zh: ce871a700922ad5c
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/long-wait:
+  en: 25898e77e2c638cc
+  zh: fe033e82a8823ee2
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/open-app:
+  en: 393e0e0304f883e2
+  zh: 6f37ac931c6395db
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/open-in-browser:
+  en: 9739ff6c54dfc875
+  zh: 61d8a39421f4c01d
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/open-in-finder:
+  en: 894a692c9b18b58a
+  zh: 593d1fa0685b5df6
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/screenshot:
+  en: 81b9ede2ec9adff3
+  zh: 96c0ff8c418528fe
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/scroll:
+  en: f863f7b9e603b573
+  zh: 7ce9134412114022
+/tool-schema-catalog/deepseek-ai-dsh-tool-computer-use/wait:
+  en: 43d8af8256cb7910
+  zh: 67774f90b054c792
 /tool-schema-catalog/deepseek-ai-dsh-plugin-manager:
   en: e0143916bb634762
   zh: e0143916bb634762

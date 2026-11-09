@@ -1,8 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { DesktopHostFatalError, DesktopHostProcess, DesktopHostUncleanExitError, QUIT_INSPECTION_DEADLINE_MS } from '../src/host-process.ts'
+import type { PlatformAccessRequest, PlatformAccessResponse } from '@deepseek-ai/dsh-deepseek-account'
 import { OperationJournal } from '../src/operation-journal.ts'
 import { readOperationHistory } from '../src/operation-history.ts'
 import { renderCrashReport } from '../src/crash-report.ts'
@@ -147,7 +148,7 @@ ${HTTP_HOST}`)
     onTestFinished(async () => { await journal.close() })
     const sink = vi.fn(value => journal.enqueue(JSON.stringify(value)))
     const first = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-      undefined, undefined, undefined, undefined, sink)
+      undefined, undefined, undefined, undefined, undefined, undefined, sink)
     hosts.push(first)
     await first.start()
     await first.stop()
@@ -160,7 +161,7 @@ ${HTTP_HOST}`)
     try {
       const failure = vi.fn()
       const second = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
-        failure, undefined, undefined, undefined, () => { throw new Error('sink unavailable') })
+        failure, undefined, undefined, undefined, undefined, undefined, () => { throw new Error('sink unavailable') })
       hosts.push(second)
       await second.start()
       expect(await second.updateTasks('inspect')).toBe(false)
@@ -360,4 +361,72 @@ it.each([undefined, '', 7])('rejects malformed Platform account identity %s on p
   await expect(host.start()).rejects.toThrow('invalid IPC event')
   expect(changed.mock.calls).toEqual([[null]])
   await host.stop()
+})
+
+const platformRequest: PlatformAccessRequest = {
+  origin: 'https://platform.deepseek.com', path: '/auth-api/v0/users/current', method: 'GET',
+  headers: { 'x-dsh-auth-token': 'fixture-grant' },
+}
+function platformHost(request: object) {
+  return HTTP_HOST.replace("process.send({ type: 'ready'",
+    `process.send({ type: 'platform-access', requestId: 1, request: ${JSON.stringify(request)} }); process.send({ type: 'ready'`)
+    .replace("process.on('message', message => {", `process.on('message', message => {
+      if (message.type === 'platform-access-result') {
+        writeFileSync(join(process.argv[3], 'platform-result.json'), JSON.stringify(message)); return
+      }`)
+    .replace("if (request.url === '/fatal')", `if (request.url === '/cancel-platform') {
+      process.send({ type: 'platform-access-cancel', requestId: 1 }); response.end('cancelled'); return
+    }
+    if (request.url === '/fatal')`)
+}
+
+it('通过私有 IPC 转发校验后的账号请求及有界响应', async () => {
+  const runtime = projectWithHost(platformHost(platformRequest))
+  const response = { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' }
+  const handler = vi.fn(async (_request: PlatformAccessRequest, _signal: AbortSignal) => response)
+  const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
+    undefined, undefined, undefined, undefined, undefined, handler)
+  hosts.push(host)
+  await host.start()
+  await expect.poll(() => existsSync(join(runtime, 'platform-result.json'))).toBe(true)
+  expect(handler).toHaveBeenCalledWith(platformRequest, expect.any(AbortSignal))
+  expect(JSON.parse(readFileSync(join(runtime, 'platform-result.json'), 'utf8')))
+    .toEqual({ type: 'platform-access-result', requestId: 1, response })
+})
+
+it.each(['cancel', 'stop'] as const)('%s 会取消浏览器账号请求并忽略迟到响应', async (action) => {
+  const runtime = projectWithHost(platformHost(platformRequest))
+  let complete!: (response: PlatformAccessResponse) => void
+  const handler = vi.fn((_request: PlatformAccessRequest, _signal: AbortSignal) =>
+    new Promise<PlatformAccessResponse>((resolve) => { complete = resolve }))
+  const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
+    undefined, undefined, undefined, undefined, undefined, handler)
+  hosts.push(host)
+  const { url } = await host.start()
+  await expect.poll(() => handler.mock.calls.length).toBe(1)
+  const signal = handler.mock.calls[0]![1]
+  if (action === 'cancel') await fetch(new URL('/cancel-platform', url))
+  else await host.stop()
+  await expect.poll(() => signal.aborted).toBe(true)
+  complete({ status: 200, headers: {}, body: '{}' })
+  await host.stop()
+  expect(existsSync(join(runtime, 'platform-result.json'))).toBe(false)
+})
+
+it.each([
+  { ...platformRequest, origin: 'https://platform.deepseek.com/other' },
+  { ...platformRequest, origin: 'http://platform.deepseek.com' },
+  { ...platformRequest, path: '/not-an-account-endpoint' },
+  { ...platformRequest, headers: { host: 'other.example' } },
+  { ...platformRequest, headers: { 'x-dsh-auth-token': 'value\r\ninjected: value' } },
+  { ...platformRequest, body: 'unexpected-get-body' },
+  { ...platformRequest, method: 'POST', body: 'x'.repeat(65_537) },
+])('拒绝不符合固定接口规则的私有账号请求 %#', async (request) => {
+  const handler = vi.fn(async () => undefined)
+  const runtime = projectWithHost(platformHost(request))
+  const host = new DesktopHostProcess(process.execPath, runtime, runtime, undefined, process.env,
+    undefined, undefined, undefined, undefined, undefined, handler)
+  hosts.push(host)
+  await expect(host.start()).rejects.toThrow('invalid IPC event')
+  expect(handler).not.toHaveBeenCalled()
 })

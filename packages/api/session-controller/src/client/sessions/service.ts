@@ -22,6 +22,10 @@ import type { SessionRemotes } from './remotes.ts'
 import type { SessionListPhase, SessionSearchResultItem, SessionProjectionSnapshot } from './manager.ts'
 import type { Session } from './session.ts'
 import type { SessionListEntry } from './lineage.ts'
+import {
+  OVERLAY_READY_MESSAGE_TYPE, OVERLAY_SHELL_ORIGIN, OVERLAY_THEME_MESSAGE_TYPE,
+  overlayClientSurface, overlaySessionId, overlaySessionMessage,
+} from '../overlay-surface.ts'
 
 /** Session list row projected from the host list RPC plus live stream increments. */
 export interface SessionSummary {
@@ -248,6 +252,17 @@ class ClientSessionReference implements SessionReference {
 
 /** Host catalog and local reference allocator; view selection remains outside the Controller. */
 export class ClientSessions implements ISessions {
+  get surface(): 'main' | 'overlay' {
+    return overlayClientSurface() ? 'overlay' : 'main'
+  }
+
+  readonly overlay: ISessions['overlay'] = {
+    shellOrigin: OVERLAY_SHELL_ORIGIN,
+    readyMessageType: OVERLAY_READY_MESSAGE_TYPE,
+    themeMessageType: OVERLAY_THEME_MESSAGE_TYPE,
+    sessionId: overlaySessionId,
+    sessionMessage: overlaySessionMessage,
+  }
   /**
    * The wire schema's own result bound, re-exposed for presentation plugins as
    * injected data. Not per-connection state: the `session.search` response
@@ -440,6 +455,12 @@ export class ClientSessions implements ISessions {
     this.manager.handleConnected()
   }
 
+  /** 清理旧账号的实例和保留范围，再读取当前库。 */
+  handleLibraryChanged(): void {
+    for (const [id, record] of this.scopes) this.retireScope(id, record)
+    this.manager.handleLibraryChanged()
+  }
+
   /**
    * Create a Host Session and publish its catalog row before resolving.
    * Callers retain the returned identity before borrowing its binding.
@@ -479,6 +500,7 @@ export class ClientSessions implements ISessions {
     increaseTitle?: boolean
     onCreated?: (childId: SessionId) => void
     allowMigration?: boolean
+    readableHistory?: boolean
   }): Promise<SessionId> {
     const sourceTitle = opts.increaseTitle
       ? this.list.getSnapshot().byId[opts.sessionId]?.title
@@ -487,6 +509,7 @@ export class ClientSessions implements ISessions {
       sessionId: opts.sessionId,
       ...(opts.atSeq === undefined ? {} : { atSeq: SessionSeq(opts.atSeq) }),
       ...(opts.allowMigration === undefined ? {} : { allowMigration: opts.allowMigration }),
+      ...(opts.readableHistory === undefined ? {} : { readableHistory: opts.readableHistory }),
     })
     if (!result.ok) throw new SessionForkError(result.error, opts.sessionId)
     this.projectList()

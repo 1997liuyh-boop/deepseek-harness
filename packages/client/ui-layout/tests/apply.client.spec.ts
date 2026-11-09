@@ -7,6 +7,7 @@ import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { HostObservable, SlotRendererHost } from '@deepseek-ai/dsh-client-ui-slots'
+import { OVERLAY_SHELL_ORIGIN, OVERLAY_THEME_MESSAGE_TYPE, overlayClientSurface } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply as themeApply, inject as themeInject, ThemeRuntime } from '@deepseek-ai/dsh-client-ui-theme/client'
 import { apply, inject, LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -58,6 +59,10 @@ async function bench() {
   if (ctx === undefined) throw new Error('the fixture owner did not activate')
   const slotsFiber = ctx.plugin(SlotRegistry)
   ctx.provide('locale', new LocaleRuntime(ctx))
+  ctx.provide('sessions', {
+    get surface() { return overlayClientSurface() ? 'overlay' : 'main' },
+    overlay: { shellOrigin: OVERLAY_SHELL_ORIGIN, themeMessageType: OVERLAY_THEME_MESSAGE_TYPE },
+  } as never)
   await ctx.plugin(ShortcutsService).await()
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
@@ -77,7 +82,7 @@ async function bench() {
 
 describe('ui-layout client apply', () => {
   it('declares its service dependencies', () => {
-    expect(inject).toEqual(['slots', 'theme', 'locale', 'shortcuts'])
+    expect(inject).toEqual(['slots', 'theme', 'locale', 'shortcuts', 'sessions'])
   })
 
   it('provides ctx.layout and declares the root-scoped frame slots', async () => {

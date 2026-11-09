@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+A recovery action with `refreshPrompt: true` repeats prompt assembly and pre-step preparation for the next real model without reclaiming inbox input or repeating completed tools. Model preparation failures also enter request recovery. Ordinary retries preserve their existing prompt snapshot.
+
 Mount `dsh-agent-loop` in any composition that should run agents. It supplies the driver behind `ctx.agents` and starts any agents you declare in its config; both [`dsh-base`](../../bundle/base/README.md) and [`dsh-sdk-minimal`](../../bundle/sdk-minimal/README.md) mount it as an explicit row.
 
 ### Configure declarative agents

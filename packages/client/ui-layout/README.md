@@ -58,6 +58,8 @@ The presenter consumes resolved theme snapshots and projects them onto the docum
 <details>
 <summary>Implementation internals — click to expand</summary>
 
+The injected `sessions` service identifies overlay documents. On that surface, this plugin skips AppFrame and receives the shell's theme messages through `sessions.overlay`.
+
 The root registration supplies folded-landscape posture through an injected observable. The renderer owns its media-query subscription; AppFrame reads the snapshot through the bound hook. Client registrations running without browser media APIs use the ordinary layout.
 
 `selectPanel(id)` checks the live `main` registry before changing selection; an absent key throws and leaves the current panel intact. `beginNavigation()` returns an abort signal for an asynchronous UI navigation. A later call, a valid panel selection (including repeated selection), or layout disposal aborts that signal without cancelling underlying Session creation. Consumers check the signal before committing navigation or moving drafts.

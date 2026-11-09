@@ -1,0 +1,1 @@
+从 CC Switch 导入CC Switch 数据目录选择文件夹读取配置模型沿用本次 CC Switch 配置；留空会在导入时自动查询供应商。导入后，会话可选择“跟随系统”使用路由策略已导入 1 项 · 已配置 0 项 · 失败 0 项全部应用claude勾选兼容项测试供应商claude · 已导入 · 已检测到凭据检查与补全Provider ID接口地址协议openai-completions模型（每行一个）API Key（可选，替换来源凭据）查询模型导入所选 (0)

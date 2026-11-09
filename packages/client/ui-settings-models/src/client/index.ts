@@ -24,11 +24,16 @@ import { WelcomeNotice } from './WelcomeNotice.tsx'
 import type { WelcomeNoticeInjected } from './WelcomeNotice.tsx'
 import { WelcomeNoticeStore } from './welcome-store.ts'
 import { ModelsSettingsStore } from './store.ts'
+import { RoutingSettingsController } from './routing-controller.ts'
+import { RoutingSection } from './RoutingSection.tsx'
+import { en as routingEn, zh as routingZh, type RoutingKey } from './routing-locales.ts'
 import { createModelsOperations } from './operations.ts'
 import { createSettingsSchemaOperations } from './schema-operations.ts'
 import { en, ja, es, fr, de, ru, pt, zh, type ModelsKey } from './locales.ts'
 import { WELCOME_NOTICE_SETTINGS_NAMESPACE } from '../onboarding-copy.ts'
 import { Config, ONBOARDING_CONFIG_GLOBAL } from '../onboarding-config.ts'
+import { ImportSection, type ImportOperations } from './ImportSection.tsx'
+import { en as importEn, zh as importZh, type ImportKey } from './import-locales.ts'
 
 export type { ModelsSectionInjected, ModelsSectionProps } from './ModelsSection.tsx'
 export type { ModelsFooterOwnerProps, ProviderCardExtrasOwnerProps } from './slot-contract.ts'
@@ -38,6 +43,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** The Models page + product-onboarding copy. */
     'settings.models': ModelsKey
+    'settings.routing': RoutingKey
+    'settings.ccSwitch': ImportKey
   }
 }
 
@@ -65,7 +72,8 @@ export function refreshIfLoaded(controller: ModelsSettingsStore): void {
  * constrained; registration depends on each slot through `slots.inject()`.
  */
 export const inject = [
-  'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session',
+  'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session', 'remote.account',
+  'remote.ccSwitchImport', 'remote.directoryPicker',
   'configForms', 'settingsSchema',
 ]
 
@@ -81,11 +89,50 @@ export function apply(ctx: ClientContext): void {
   const configured = Config(payload === undefined ? {} : payload)
   const credentialOnboarding = configured.credentialOnboarding && !('dshDesktop' in globalThis)
   ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), 'ui-settings-models: copy dictionaries')
+  ctx.effect(() => ctx.locale.register('settings.routing', { zh: routingZh, en: routingEn }), 'ui-settings-models: routing dictionaries')
+  const routing = new RoutingSettingsController(ctx)
+  ctx.slots.inject('settings.models.footer', () => ctx.slots.register({
+    name: 'settings.models.footer', id: 'provider-routing', order: 0, locale: 'settings.routing',
+    inject: () => ({ controller: routing, hooks: { routing: routing.store } }),
+  }, RoutingSection))
+  ctx.effect(() => {
+    const refresh = () => { if (routing.store.getSnapshot().loaded) void routing.load() }
+    const disposers = [ctx.remote.$on('session/access-changed', refresh), ctx.remote.$on('settings/document-updated', refresh)]
+    return () => { for (const dispose of disposers) dispose() }
+  }, 'ui-settings-models: 路由与历史库设置刷新')
 
   const schema = createSettingsSchemaOperations(ctx.settingsSchema)
   // Bound once here, where the Remote namespaces are declared in this plugin's
   // own `inject`; the cards receive callbacks and never a context.
   const operations = createModelsOperations(ctx)
+  ctx.effect(() => ctx.locale.register('settings.ccSwitch', { en: importEn, zh: importZh }), 'ui-settings-models: 导入文案')
+  const importText = ctx.locale.bind('settings.ccSwitch')
+  const ccSwitchImport = ctx.remote.ccSwitchImport
+  const directoryPicker = ctx.remote.directoryPicker
+  const checked = <T>(result: { ok: true; value: T } | { ok: false; error: { code: string; details?: object } }): T => {
+    if (result.ok) return result.value
+    const reason = result.error.details !== undefined && 'reason' in result.error.details ? String(result.error.details.reason) : 'unknown'
+    const key: ImportKey = reason === 'read' || reason === 'directory' ? 'readError' : reason === 'models' ? 'queryError' : Object.hasOwn(importEn, reason) ? reason as ImportKey : 'unknown'
+    throw new Error(importText(key))
+  }
+  const importOperations: ImportOperations = {
+    scan: async directory => checked(await ccSwitchImport.scan(directory)),
+    models: async (token, id, baseURL, api, apiKey) =>
+      checked(await ccSwitchImport.models(token, id, baseURL, api, apiKey)),
+    commit: async (token, selected) => checked(await ccSwitchImport.commit(token, selected)),
+    pick: async () => {
+      const page = globalThis as typeof globalThis & { __DSH_DIRECTORY_PICKER__?: { pick(): Promise<string | null> } }
+      const native = page.__DSH_DIRECTORY_PICKER__
+      if (native) return native.pick()
+      const result = await directoryPicker.pick()
+      if (!result.ok) throw new Error(result.error.message)
+      return result.value
+    },
+  }
+  ctx.slots.inject('settings.models.footer', () => ctx.slots.register({
+    name: 'settings.models.footer', id: 'cc-switch-import', order: -1, locale: 'settings.ccSwitch',
+    inject: () => ({ operations: importOperations }),
+  }, ImportSection))
   const controller = new ModelsSettingsStore(ctx, schema, ctx.configForms.describe())
   // Registration-time text (the nav label thunk) and the inject faces share
   // one bound translate; copy freshness rides the locale revision.

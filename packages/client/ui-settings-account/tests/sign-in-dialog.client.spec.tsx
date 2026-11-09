@@ -199,10 +199,18 @@ it.each([en, zh])('shows network advice only when the login request received no 
   expect(props.start).toHaveBeenCalledOnce()
 })
 
-it.each(['network', 'protocol', 'storage'] as const)('keeps generic copy for %s failures', (errorCode) => {
+it.each([
+  ['network', 'networkFailure'], ['access-blocked', 'accessBlocked'], ['protocol', 'protocolFailure'], ['storage', 'storageFailure'],
+] as const)('针对 %s 错误显示可以执行的恢复说明', (errorCode, key) => {
   mount({ id, phase: 'failed', errorCode })
-  expect(screen.getByText(en.failed)).toBeTruthy()
+  expect(screen.getByText(en[key])).toBeTruthy()
   expect(screen.queryByText(en.noResponse)).toBeNull()
+})
+
+it.each([en, zh])('显示访问验证恢复说明并保留重试入口', async (copy) => {
+  mount({ id, phase: 'failed', errorCode: 'access-blocked' }, copy)
+  await expect(`${screen.getByRole('dialog').textContent}\n`).toMatchFileSnapshot(`./expected/login-access-blocked-${copy === en ? 'en' : 'zh'}.txt`)
+  expect(screen.getByRole('button', { name: copy.retry }).hasAttribute('disabled')).toBe(false)
 })
 
 it('does not reuse network advice for a subsequent start failure', async () => {

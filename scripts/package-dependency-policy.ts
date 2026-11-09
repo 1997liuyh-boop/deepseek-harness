@@ -75,6 +75,9 @@ const SAFE_HOST_DEPENDENCY_EXPORTS = {
 
 /** Runtime exports that require every consumer to resolve the provider's shared peer instance. */
 const PEER_REQUIRED_HOST_EXPORTS = {
+  // 导入器使用当前凭据服务的引用校验和已安装模型适配器的协议列表。
+  '@deepseek-ai/dsh-credentials': ['credentialRef'],
+  '@deepseek-ai/dsh-llm-pi-ai': ['supportedProtocols'],
   // Profile settings must match the installed Node provider's configuration schema.
   '@deepseek-ai/dsh-ptc-runtime-node/configuration': ['resolvePersistentExecution'],
   // CUA checks UserQuestionError and preserves AttachmentError from image admission.

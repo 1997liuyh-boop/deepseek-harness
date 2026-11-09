@@ -74,6 +74,16 @@ declare module '@deepseek-ai/cordis' {
      */
     'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
 
+    /**
+     * 在输入投影前检查已捕获的模型能力；错误转换成请求失败，不另行解析模型。
+     * @param options - 本次请求。
+     * @param model - 与实际派发绑定的模型元数据。
+     * @param next - 委派后续输入检查。
+     * @returns 检查完成时兑现。
+     * @mode waterfall
+     */
+    'llm/validate-input'(this: LlmRuntime, options: GenerateOptions, model: Readonly<LlmResolvedModelInfo>, next: () => Promise<void>): Promise<void>
+
   }
 }
 
@@ -653,6 +663,7 @@ export class LlmRuntime extends TypertRemoteService {
         error instanceof Error ? error.message : String(error),
         {
           settingsNs,
+          failureCode: normalizeLlmFailure(error).code,
           ...request.baseURL === undefined ? {} : { baseURL: request.baseURL },
         },
         { cause: error },
@@ -1029,7 +1040,11 @@ export class LlmRuntime extends TypertRemoteService {
       if (message.role !== 'assistant') return message
       const source = message.source
       if (source.replayState === undefined) return message
-      if (this.adapters.get(source.provider)?.adapter === adapter) return message
+      if (source.provider === options.provider && source.model === options.model
+        && this.adapters.get(source.provider)?.adapter === adapter) return message
+      if (message.content.some(block => block.type === 'reasoning' && block.text.trim() === '')) {
+        throw new LlmError('This history contains reasoning without readable text. Return to the original provider/model, or create a new conversation from readable history.', 'REPLAY_INCOMPATIBLE')
+      }
       return freezeMessage({
         ...message,
         source: { kind: 'model', provider: source.provider, model: source.model },
@@ -1097,6 +1112,7 @@ export class LlmRuntime extends TypertRemoteService {
         : Object.isFrozen(options)
           ? deepFreeze({ ...options, ...resolvedConfig })
           : { ...options, ...resolvedConfig }
+      await this.ctx.waterfall(this, 'llm/validate-input', resolvedOptions, modelInfo, () => Promise.resolve())
       // Files are never dispatched natively: every route receives handle text.
       let projectedMessages: readonly RequestMessage[] = resolvedOptions.messages
       if (projectedMessages.some(message => contentHasFile(message.content))) {

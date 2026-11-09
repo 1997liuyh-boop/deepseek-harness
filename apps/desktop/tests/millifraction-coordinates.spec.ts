@@ -1,0 +1,51 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  MILLIFRACTION_COORDINATES_FILE,
+  defaultMillifractionEnabled,
+  orbCoordinateModeFor,
+  readMillifractionCoordinates,
+  writeMillifractionCoordinates,
+} from '../src/millifraction-coordinates.ts'
+
+const roots: string[] = []
+
+afterEach(() => {
+  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
+
+describe('millifraction coordinates config', () => {
+  it('defaults to millifraction on Windows and pixels on macOS and Linux', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-millifraction-'))
+    roots.push(root)
+    expect(defaultMillifractionEnabled('win32')).toBe(true)
+    expect(defaultMillifractionEnabled('darwin')).toBe(false)
+    expect(defaultMillifractionEnabled('linux')).toBe(false)
+    expect(readMillifractionCoordinates(root)).toEqual({ enabled: defaultMillifractionEnabled() })
+    expect(orbCoordinateModeFor(true)).toBe('millifraction')
+    expect(orbCoordinateModeFor(false)).toBe('pixel')
+  })
+
+  it('reads and writes enablement beside other orb prefs', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-millifraction-rw-'))
+    roots.push(root)
+    writeFileSync(join(root, 'floating-session.json'), '{"sessionId":"keep"}\n')
+    writeMillifractionCoordinates(root, { enabled: false })
+    expect(JSON.parse(readFileSync(join(root, MILLIFRACTION_COORDINATES_FILE), 'utf8'))).toEqual({
+      enabled: false,
+    })
+    expect(readMillifractionCoordinates(root)).toEqual({ enabled: false })
+    expect(readFileSync(join(root, 'floating-session.json'), 'utf8')).toBe('{"sessionId":"keep"}\n')
+  })
+
+  it('ignores invalid JSON', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-millifraction-bad-'))
+    roots.push(root)
+    writeFileSync(join(root, MILLIFRACTION_COORDINATES_FILE), '[]\n')
+    expect(readMillifractionCoordinates(root).enabled).toBe(defaultMillifractionEnabled())
+    writeFileSync(join(root, MILLIFRACTION_COORDINATES_FILE), '{"enabled":"no"}\n')
+    expect(readMillifractionCoordinates(root).enabled).toBe(defaultMillifractionEnabled())
+  })
+})

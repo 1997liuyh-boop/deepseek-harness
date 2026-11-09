@@ -52,6 +52,8 @@ kind: "package-reference"
 
 设置命名空间采用 Cordis entry id，没有 entry 时采用插件名。产品保留 official 的 `llm-deepseek` entry id，账号使用 `llm-deepseek-account`。
 
+主动查询模型和检查密钥使用同源的只读 `/models` 接口及 Bearer 鉴权，并移除配置路径末尾的 `/anthropic`。查询仅使用本次输入或已保存的密钥，不保存凭据、不发起聊天。`discoveryTimeoutMs` 默认为 15000；调用取消和插件卸载会中止查询。鉴权拒绝、连接失败、超时和目录响应无效分别报告。普通模型列表仍使用已配置的目录。
+
 <a id="understand-the-implementation"></a>
 ## 理解实现
 

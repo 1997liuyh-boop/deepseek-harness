@@ -41,6 +41,15 @@ function checkpointSource(compactionId: string): CheckpointSource {
 
 const TITLE_SERVICE_CONFIG = { fallbackMaxWords: 8, fallbackMaxBytes: 64, maxTitleBytes: 256 }
 
+function forwardedListingSignal(original: AbortSignal): AbortSignal {
+  expect(TestPersistence.listSignals).toHaveLength(1)
+  const combined = TestPersistence.listSignals[0]
+  if (combined === undefined) throw new Error('Expected the combined corpus listing signal')
+  expect(combined.aborted).toBe(original.aborted)
+  expect(combined.reason).toBe(original.reason)
+  return combined
+}
+
 function header(id: string, createdAt = 1, extra: Partial<SessionHeader> = {}): SessionHeader {
   return { version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt, isSeeded: false, ...extra }
 }
@@ -367,7 +376,7 @@ describe.each(cancellableExactReads)('$name cancellation', ({ inspects, run }) =
 
     expect(settled).toBe(false)
     expect(active).toBe(true)
-    expect(TestPersistence.listSignals).toEqual([controller.signal])
+    forwardedListingSignal(controller.signal)
     expect(TestPersistence.readCalls).toEqual([])
 
     cleanup.resolve(undefined)
@@ -415,8 +424,8 @@ describe.each(cancellableExactReads)('$name cancellation', ({ inspects, run }) =
 
     expect(settled).toBe(false)
     expect(active).toBe(true)
-    expect(TestPersistence.listSignals).toEqual([controller.signal])
-    expect(TestPersistence.readSignals).toEqual(inspects ? [controller.signal] : [])
+    const combined = forwardedListingSignal(controller.signal)
+    expect(TestPersistence.readSignals).toEqual(inspects ? [combined] : [])
 
     release.resolve(undefined)
     await expect(pending).rejects.toBe(reason)
@@ -465,8 +474,8 @@ describe.each(cancellableExactReads.filter(read => read.inspects))(
 
       expect(settled).toBe(false)
       expect(active).toBe(true)
-      expect(TestPersistence.listSignals).toEqual([controller.signal])
-      expect(TestPersistence.readSignals).toEqual([controller.signal])
+      const combined = forwardedListingSignal(controller.signal)
+      expect(TestPersistence.readSignals).toEqual([combined])
 
       cleanup.resolve(undefined)
       await expect(pending).rejects.toBe(reason)
@@ -605,8 +614,14 @@ describe('session-query exact reads', () => {
     expect(results[1]).toMatchObject({ value: { session: first, title: { title: 'First title' } } })
     expect(TestPersistence.listCalls).toBe(1)
     expect(TestPersistence.readCalls).toEqual([second.id, first.id])
-    expect(TestPersistence.listSignals).toEqual([signal])
-    expect(TestPersistence.readSignals).toEqual([signal, signal])
+    const combined = forwardedListingSignal(signal)
+    expect(combined).not.toBe(signal)
+    expect(TestPersistence.readSignals).toEqual([combined, combined])
+    const accessSignal = ctx.sessions.access.signal
+    ctx.sessions.access.invalidate()
+    expect(combined.aborted).toBe(true)
+    expect(combined.reason).toBe(accessSignal.reason)
+    expect(signal.aborted).toBe(false)
   })
 
   it('bounds persisted title inspection concurrency while preserving ordered results', async () => {
@@ -715,8 +730,8 @@ describe('session-query exact reads', () => {
     controller.abort(reason)
 
     await expect(pending).rejects.toBe(reason)
-    expect(TestPersistence.listSignals).toEqual([controller.signal])
-    expect(TestPersistence.readSignals).toEqual([controller.signal])
+    const combined = forwardedListingSignal(controller.signal)
+    expect(TestPersistence.readSignals).toEqual([combined])
   })
 
   it('drains started title inspections after cancellation without starting queued ids', async () => {
@@ -786,7 +801,7 @@ describe('session-query exact reads', () => {
     controller.abort(reason)
 
     await expect(pending).rejects.toBe(reason)
-    expect(TestPersistence.listSignals).toEqual([controller.signal])
+    forwardedListingSignal(controller.signal)
     expect(TestPersistence.readCalls).toEqual([])
   })
 

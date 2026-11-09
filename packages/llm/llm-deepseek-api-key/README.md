@@ -52,6 +52,8 @@ A `models` list that differs from the built-in catalog replaces the catalog and 
 
 The settings namespace is the Cordis entry id, or the plugin name without an entry. Product profiles retain the official entry id `llm-deepseek` and use `llm-deepseek-account` for the account route.
 
+Explicit model queries and credential checks use the same origin's read-only `/models` endpoint with Bearer authentication; a trailing `/anthropic` is removed from the configured path. They use the supplied key once or resolve the saved credential, never store it, and never send a chat request. `discoveryTimeoutMs` defaults to 15000; caller cancellation and plugin disposal abort the query. Authentication rejection, connection failure, timeout and invalid directory responses remain distinct failures. Ordinary model listing continues to use the configured catalog.
+
 <a id="understand-the-implementation"></a>
 ## Understand the implementation
 

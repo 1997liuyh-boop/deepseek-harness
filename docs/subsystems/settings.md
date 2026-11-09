@@ -22,6 +22,43 @@ A form namespace is the local id of a uniquely addressed entry in the active pro
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxccswitchimport--ccswitchimport"></a>
+
+### `ctx.ccSwitchImport` — `CcSwitchImport`
+
+扫描标识在内存中有时限，卸载后销毁；提交操作串行且等待释放。
+
+```ts cordis-catalog
+/**
+ * 读取来源并返回脱敏候选，不发出供应商网络请求。
+ * @param directory - 空串自动定位，其他值必须为绝对目录。
+ * @returns 有时限的扫描及当前可用协议。
+ */
+@Remote scan(directory: string): Promise<ImportScan>
+
+/**
+ * 用户明确请求后，使用 Host 持有的来源凭据查询模型。
+ * @param token - 有效扫描标识。
+ * @param id - 扫描中的候选。
+ * @param baseURL - 用户确认的接口地址。
+ * @param api - 用户确认的协议。
+ * @param apiKey - 用户显式填写的替代凭据，空串使用来源凭据。
+ * @param signal - 连接生命周期。
+ * @returns 供应商真实返回的模型标识。
+ */
+@Remote models( token: ImportScanToken, id: ImportCandidateId, baseURL: string, api: string, apiKey: string, signal: AbortSignal, ): Promise<string[]>
+
+/**
+ * 逐项新增供应商；空模型列表按查询时限自动读取，不修改默认模型，失败项保留可重试。
+ * @param token - 有效扫描标识。
+ * @param selections - 用户勾选并确认的供应商数据。
+ * @returns 每项保存、已有或失败的结果；不含凭据。
+ */
+@Remote commit(token: ImportScanToken, selections: ImportSelection[]): Promise<ImportResult[]>
+```
+
+Source: [`packages/client/ui-settings-models/src/cc-switch.ts`](../../packages/client/ui-settings-models/src/cc-switch.ts)
+
 <a id="ctxsettings--settingsforms"></a>
 
 ### `ctx.settings` — `SettingsForms`

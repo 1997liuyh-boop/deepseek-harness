@@ -37,6 +37,16 @@ export type ReaderEndpointClass = Extract<ViewerEndpointClass, `reader-${string}
  * `reader-*` entries, so the policy whitelist has no second handwritten copy.
  */
 export const VIEWER_ENDPOINT_CLASSES = {
+  'ccSwitchImport/commit': 'owner-only',
+  'ccSwitchImport/models': 'owner-only',
+  'ccSwitchImport/scan': 'owner-only',
+  'session/libraryCandidates': 'owner-only',
+  'session/libraryState': 'owner-only',
+  'session/setLibraryMode': 'owner-only',
+  'session/migrateLibrary': 'owner-only',
+  'session/restoreLibrary': 'owner-only',
+  'session/routingPolicy': 'owner-only',
+  'session/saveRoutingPolicy': 'owner-only',
   // ── reader-global-read ─────────────────────────────────────────────────────────────
   'llm/listConfigurableProviders': 'reader-global-read', // the page reads the configurable provider catalog
   'llm/listProviders': 'reader-global-read', // the page lists providers

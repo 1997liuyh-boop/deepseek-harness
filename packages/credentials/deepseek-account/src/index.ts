@@ -6,6 +6,14 @@ export { isRunningAccountTask, installAccountTaskCancellation } from './account-
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
+    /** 获取指定平台的浏览器访问验证；无人处理时继续委托。
+     * @mode waterfall
+     * @param request - 来源和路径固定的账号请求，仅供私有通道使用。
+     * @param signal - 原请求的取消和超时信号。
+     * @param next - 委托下一个验证提供者。
+     */
+    'deepseek-account/platform-access'(request: PlatformAccessRequest, signal: AbortSignal,
+      next: () => Promise<PlatformAccessResponse | undefined>): Promise<PlatformAccessResponse | undefined>
     /** Local grant removal has completed.
      * @mode emit
      */
@@ -15,6 +23,22 @@ declare module '@deepseek-ai/cordis' {
     deepseekAccount: DeepSeekAccount
   }
 }
+
+/** 通过私有进程 IPC 发往浏览器网络栈的同来源账号请求。 */
+export interface PlatformAccessRequest {
+  readonly origin: string
+  readonly path: string
+  readonly method: 'GET' | 'POST'
+  readonly headers: Readonly<Record<string, string>>
+  readonly body?: string
+}
+
+/** 私有通道返回的有界响应或稳定失败，不进入渲染层。 */
+export type PlatformAccessResponse = {
+  readonly status: number
+  readonly headers: Readonly<Record<string, string>>
+  readonly body: string
+} | { readonly errorCode: 'no-response' | 'access-blocked' | 'protocol' }
 
 /** Host-only credentials for an embedded Platform document; never expose through account RPC. */
 export interface PlatformSession {

@@ -13,6 +13,7 @@ Desktop runs the Harness workspace in a native application. This reference cover
 ## Table of Contents
 
 - [Application overview](#application-overview)
+- [Selection toolbar](#selection-toolbar)
 - [Terminal command](#terminal-command)
 - [Closing the window and quitting](#closing-the-window-and-quitting)
 - [Key technical decisions](#key-technical-decisions)
@@ -51,9 +52,31 @@ Desktop Host Platform API requests and update-policy requests identify the insta
 
 A server-expired account credential returns to Welcome when no official API key is configured; an available API key keeps the workspace open. Explicit sign-out follows the same rule. Both Welcome and the workspace display the localized expiry notice.
 
+Platform account requests rejected by access protection use Chromium networking in a separate persistent Session keyed by the configured HTTPS origin. Browser Cookies stay in Electron; private process IPC carries only validated fixed-path requests and bounded responses. Explicit challenges open a sandboxed official verification page without a preload; a CAPTCHA for a GET request opens that fixed interface with its original request headers. Cross-origin navigation, child windows and device permissions are denied. Verification may retry a request once within its original deadline. Cancellation, closing the window or shutdown ends pending verification; concurrent requests share one window without one caller cancelling the others. Failed verification preserves account authorization and existing histories.
+
 Desktop microphone access is restricted to audio requests from the primary `dsh-app://app` frame. macOS uses system microphone authorization, a packaged usage description, and `com.apple.security.device.audio-input` in the main application and Helper signatures.
 
 Press F12 (Fn+F12 on media-key keyboards), Command+Option+I on macOS, or Ctrl+Shift+I on Windows to toggle DevTools for the focused application page, including in packaged builds. The application menu shows a localized “Developer tools” command in a separate group before Hide and Quit (before Exit on Windows). Windows exposes it in the titlebar application popup; its hidden native application menu registers the shortcuts. macOS and Linux keep a hidden F12 shortcut alias in their application menus. Update overlays and packaged embedded browser guests disable DevTools.
+
+The floating chat can collapse while an AI reply continues. Leaving the window folds it unless pinned, typing with an IME, or awaiting a question or permission response. Hover keeps the loaded avatar and avoids repeated native window resizing. Windows needs no macOS Screen Recording or Accessibility switches; macOS opens them from Settings → Floating ball.
+
+<a id="selection-toolbar"></a>
+
+## Selection toolbar
+
+Select text in another application to open the rounded toolbar. Its six actions are Search, Translate, Quick note, WeChat article, Explain, and Send to Agent. The floating ball menu enables or disables selection capture. Ordinary chat activity keeps selection available; Computer Use input temporarily hides the toolbar.
+
+Translate and Explain open independent result windows beside the selection's mouse position, flipping or clamping within that display's work area. Translation defaults to English on a new profile, remembers the last target, and accepts any language name. Each task uses the current dsh session's selected model, or the configured default when no session is selected. Original text and instructions are recorded in a separate standard session without navigating the main chat or floating ball. New translation sessions, including retries, belong to the reusable **Translation squad** workspace; existing sessions retain their original placement, and Explain keeps its usual placement. A grouping failure stops the task and reports an error before creating a session. Results render Markdown headings, lists, emphasis, tables, and code during streaming and after completion; copying preserves the original Markdown. Raw HTML is displayed as text and dangerous link protocols are disabled. The window supports retry and stopping its own task; closing it also cancels that task. Model failures keep available text and show a retryable error.
+
+Quick note saves editable text as Markdown under `$DSH_HOME/profiles/desktop/selection-notes`. WeChat article accepts a public `mp.weixin.qq.com` article link, previews its main content, and saves Markdown and available images under `$DSH_HOME/profiles/desktop/wechat-articles`. Both actions offer a native folder chooser and create unique filenames. Video entries link to the original article; failed image downloads retain their links and report missing items. Verification and login redirects show their actual access requirement instead of an invalid-link error; **Open original article** opens the validated article URL in the default browser. Failed fetching preserves any existing preview.
+
+Link fetching does not share desktop WeChat's login or purchase session. Enter the article title under **Import WeChat text** and keep its original link above. **Read rich text clipboard** reads content you explicitly copied in WeChat, retains supported WeChat image positions, and downloads available images when saved. Plain text remains available through **Preview imported text**. Check the purchased portion and ending; importing does not automatically verify completeness or fetch protected media. Editing a plain-text draft requires another preview before saving; cancelling a file or folder chooser retains the draft.
+
+A paid article is detected from the public page's subscription markers: the window shows the preview share and price, keeps saving disabled, and offers **Import copied body**, which reads the body you copied inside WeChat and fills the title, author and date from the public page. Translate and Explain follow the main window's current session model by default; pick a fixed model, including third-party providers from Settings → Models, in the result window's model list or the floating ball menu's **Selection Toolbar Model** submenu. The choice is stored in `$DSH_HOME/profiles/desktop/selection-toolbar.json`.
+
+**Import printed PDF** keeps a PDF exported from WeChat, extracts searchable text, and renders each page to a static PNG preserving its printed layout. PDFs are limited to 40 MB and 100 pages, with 120 MB of rendered pages. Printed images may be lower quality than originals; GIF animation and videos are not preserved in print. **Add images / videos** attaches user-selected image and video originals, using relative references. Supported formats are PNG, JPEG, GIF, WebP, MP4, MOV, M4V and WebM; selection checks file signatures, not video completeness. Up to 50 files per selection, images up to 25 MB, videos up to 1 GB, and 2 GB total attachments are supported. The archive includes SHA-256 values and per-file outcomes in `media.json`; changed or unreadable files are reported as missing. Export videos through their original player and check full playback after saving. The app does not inspect unrelated WeChat caches or decrypt media.
+
+Windows first reads accessible selected text. The result window's **Compatible selection capture for WeChat** switch enables a Ctrl+C fallback for drag or double-click selections only in identified WeChat windows when accessible text is unavailable. This fallback copies selected text and leaves it in the clipboard; selection capture never writes old clipboard data back. Capture accepts only nonempty text from the original process while the gesture, foreground window, clipboard owner and sequence remain unchanged. Images, files, unknown formats and unrelated clipboard changes are ignored for selection. Some WeChat versions or protected pages can still prevent selection; paste the copied article link into the archive window in that case.
 
 <a id="terminal-command"></a>
 
@@ -185,6 +208,8 @@ macOS and Linux GUI launches inherit only the session manager's environment, wit
 
 ## Develop
 
+Desktop Host directly depends on both `dsh-base` and `dsh-web-app` so its profile bundles resolve from the host installation even when the profile has no local copies.
+
 The development application menu offers Reload Page (Cmd+R on macOS, Ctrl+R elsewhere) and Restart App and Host. Restart waits for Host shutdown before relaunching Electron and starting a new Host; neither action rebuilds source files.
 
 `dev:desktop` builds the current Host, client bundles, Web frontend, and Electron shell, projects the built CLI and private Desktop Host packages with their workspace dependencies into a disposable desktop npm project, and launches Electron without resolving dsh from npm:
@@ -208,6 +233,18 @@ The Web counterparts are `pnpm run dev:web` and `pnpm run start:web`, documented
 The [native/renderer keyboard tests](tests/keyboard.spec.ts) compile as part of the repository Client typecheck. Their Desktop imports are limited to Cordis-free input, persistence, IPC, browser-guest, and overlay modules.
 
 Dependency installation does not run the locked Electron package's separate binary installer. Before running the [Windows console-signal tests](tests/windows-cli-signals.spec.ts) directly, prepare the locked Electron binary with `pnpm --filter @deepseek-ai/dsh-desktop exec install-electron` from the repository root. For downloads through a proxy, enable `ELECTRON_GET_USE_PROXY=1` for that installer process. Windows coverage aggregates require successful provisioning before the instrumented unit inventory starts.
+
+<a id="studio-development"></a>
+
+### Studio development
+
+The studio library is a separate checkout. Prepare its dependencies according to its README, then run from the Harness root with existing build artifacts:
+
+```sh
+pnpm run dev:desktop:studio --library <library-directory> --skip-build
+```
+
+`--skip-build` skips the Harness build; the launcher still builds the library and installs its catalogued plugins into the development profile. On Windows, the Toonflow and Printfilm services also require prepared `studio-apps`, `studio-runtime` and `studio-data` directories beside this repository. `--library` selects the library checkout and does not relocate those directories. `DSH_STUDIO_NODE` overrides the dedicated Node executable used by the Windows launch scripts.
 
 ### Startup onboarding
 
@@ -318,7 +355,7 @@ Updater adapter compatibility and platform version records are documented in [El
 
 ### Mandatory update policy
 
-Packaging reads `.env.windows` or `.env.macos`: `DSH_DESKTOP_AUTO_UPDATE_ENV=test` (the default) selects `DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN`; `production` selects `DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN`. The templates leave both origins blank; fill in the selected deployment origin in the ignored local dotenv file. Local unsigned macOS builds omit this policy and do not read either file. Other modes require the selected origin before preparation or signing, including unsigned Windows and preparation-only builds; the unselected origin is optional. These settings never fall back to the parent environment or the other deployment. Packaging embeds the selected policy with the application ID; packaged applications ignore runtime overrides.
+Packaging reads `.env.windows` or `.env.macos`: `DSH_DESKTOP_AUTO_UPDATE_ENV=test` (the default) selects `DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN`; `production` selects `DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN`. The templates leave both origins blank; fill in the selected deployment origin in the ignored local dotenv file. Local unsigned macOS builds and explicit Windows `--unsigned --local` builds omit this policy and do not read either file. Other modes require the selected origin before preparation or signing, including ordinary unsigned Windows and preparation-only builds; the unselected origin is optional. These settings never fall back to the parent environment or the other deployment. Packaging embeds the selected policy with the application ID; packaged applications ignore runtime overrides.
 
 `DSH_DESKTOP_MANDATORY_UPDATE_CONFIG` JSON supplies test login origins and optional polling and download-page options; packaging rejects `origin` and `authentication` inside it. The page allowlist defaults to the selected service origin; explicitly allow other approved download-page origins when needed. Test builds select `feishu-test` and require `allowedAuthOrigins` in `DSH_DESKTOP_MANDATORY_UPDATE_CONFIG`; production selects `anonymous` and rejects that field. Each login origin must be an HTTPS origin without credentials, path, query, or fragment. The login window permits document navigation only to the selected policy origin and these configured origins. Policy requests reject redirects; only test authentication carries gateway cookies. Unpackaged development instead reads a complete policy JSON from this variable and requires `DSH_DESKTOP_APP_ID`; absent JSON disables development policy queries, and only anonymous development permits HTTP `127.0.0.1`. A user-initiated ordinary check triggers policy work concurrently but never waits for or reports a policy failure. Only a confirmed blocking decision cancels ordinary dialogs. Test authentication waits until the active ordinary dialog finishes, and cancellation or failure does not discard the updater result.
 
@@ -374,6 +411,12 @@ An unpackaged Electron process uses `.desktop-build/development/project` under i
 <a id="known-limitations"></a>
 
 ## Known limitations
+
+The floating orb's context menu includes **Screenshot / Recording**. Drag across the desktop to select an area, then move or resize it. Screenshot tools provide rectangles, arrows, text, undo, reselect, copy and save. Copy writes the annotated image to the clipboard; Save opens the native Save As dialog. Recording captures the selected area within one display and switches to a movable, always-on-top control bar with elapsed time, pause/resume, stop/save and discard. Cancelling Save As or a write failure retains the capture for retry until it is discarded or the capture window closes. Recording is limited to 15 minutes of elapsed wall time and 500 MB; Windows can include system audio. Captures are not sent to a model automatically.
+
+The WeChat archive result offers the same capture window to attach readable images or a video recording after importing the article body. Rich-text clipboard import retains downloadable images; PDF import keeps the original and static pages. Public-page fetching does not use the user's WeChat login and may return only a paid preview. Screen recordings preserve visible playback rather than original media; protected video may be black. The preview and saved archive identify the source and require a completeness check.
+
+The studio development launcher applies the version-checked [usage-plugin balance compatibility fix](../../scripts/patch-usage-balance.mjs) to an installed usage plugin. Its DeepSeek balance query follows the official model's credential reference, never a browser login or a third-party provider with a matching name. HTTP 401 instructs the user to update the Open Platform API key in **Settings → Models → DeepSeek**. The built-in **DeepSeek Account** provider uses browser authorization; the built-in **DeepSeek** provider uses an API key.
 
 - Account sign-in is not connected; the Sign in button is disabled. Windows material rendering still requires platform QA.
 

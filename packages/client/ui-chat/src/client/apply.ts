@@ -6,13 +6,14 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { TurnTailOwnerProps } from './contract/slots.ts'
 import type { GroupKey } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-browser/client'
 import type {} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
-// The `file` entry of `SidebarRightResourceParamsMap`, which types `{ params: { line } }` below.
+
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-documentpreview/client'
 import { fileAddressFor, resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 // Type-only service and declaration merges used by the apply world.
@@ -52,6 +53,7 @@ import { useTurnDataValue } from './chat/use-turn-data.ts'
 import { bindDisclosure } from './chat/use-disclosure.ts'
 import { useFlowHidden, useMotionHidden } from './chat/flow-motion.ts'
 
+
 /** Bind group and header visibility to the viewport of one flow render. */
 export const CHAT_FLOW_INJECT: ChatFlowInjected = {
   hooks: {
@@ -64,6 +66,7 @@ export const CHAT_FLOW_INJECT: ChatFlowInjected = {
   },
 }
 
+
 /** Bind node-local sources and forward the flow's existing visibility hook. */
 export const CHAT_NODE_INJECT: ChatNodeInjected = {
   hooks: {
@@ -75,22 +78,22 @@ export const CHAT_NODE_INJECT: ChatNodeInjected = {
   },
 }
 
-/** Services required by the Chat target and its presentation registrations. */
+
 export const inject = [
   'slots', 'sessions', 'uiWorkspace', 'uiSession', 'uiConversation', 'locale',
   'configForms', 'connection', 'remote', 'remote.session', 'sidebarRight', 'fileDrag',
 ]
 
-/**
- * Mount all Chat-owned contributions.
- * @param ctx - Client root context.
- */
+
+
+
+
 export function apply(ctx: Context): void {
   const quotaNotice = createSnapshotStore<QuotaNoticeState | null>(null)
   let quotaNoticeSeq = 0
-  // Each hold is its own token, so a release can only drop the hold it was
-  // issued for: one arriving after a dismissal or a later acquisition leaves
-  // that newer hold alone.
+
+
+
   const quotaNoticeHolds = new Set<symbol>()
   const chatSources = new WeakMap<SessionBinding, ObservableSnapshot<ChatSnapshot>>()
   const quotaSubscriptions = new Set<() => Promise<void>>()
@@ -100,9 +103,9 @@ export function apply(ctx: Context): void {
   const chatSource = (binding: SessionBinding): ObservableSnapshot<ChatSnapshot> => {
     let source = chatSources.get(binding)
     if (source === undefined) {
-      // One live quota failure publishes one frame-wide notice; history
-      // replacement or paging never does, because an old failure scrolling
-      // back into view is not news.
+
+
+
       const dispose = binding.ctx.effect(() => {
         const stop = binding.eventSource.subscribe(() => {
           const { change } = binding.eventSource.getSnapshot()
@@ -168,7 +171,9 @@ export function apply(ctx: Context): void {
       }),
     }, LinkOpeningRow))
   })
-  const transcriptView = new TranscriptViewPolicy(chatSettings, 'dshDesktop' in globalThis ? 'standard' : DEFAULT_TRANSCRIPT_VIEW_MODE)
+  const transcriptView = new TranscriptViewPolicy(
+    chatSettings, 'dshDesktop' in globalThis ? 'standard' : DEFAULT_TRANSCRIPT_VIEW_MODE, ctx.sessions.surface === 'overlay',
+  )
   const presentation = derivePresentationPolicy(transcriptView.mode, transcriptView.collapseTiming, transcriptView.foldedReplies)
   const performancePolicy = new PerformanceUsagePolicy(chatSettings)
   ctx.effect(() => () => { transcriptView.dispose(); performancePolicy.dispose() })
@@ -252,6 +257,19 @@ export function apply(ctx: Context): void {
         const chat = chatSource(binding)
         return {
           ...nodeSources(binding),
+          fileMentions: (owner: TurnTailOwnerProps, getFileTriggerProps) => ctx.get('chatFileMentions')?.forClosing(owner, sessionId, getFileTriggerProps),
+
+
+
+
+
+
+
+
+
+
+
+
           fileDrag: ctx.fileDrag.actions,
           hooks: { presentation, interactionIds: ctx.uiConversation.interactions },
           dispatchInteraction: gesture => ctx.uiConversation.interactions.dispatch(sessionId, gesture),
@@ -298,15 +316,17 @@ export function apply(ctx: Context): void {
             },
             read: () => chatScrollPositions.get(sessionId) ?? null,
           },
-          forkAt: (seq) => {
+          forkAt: (seq, readableHistory) => {
             const turn = [...chat.getSnapshot().timeline.turns.values()].find(turn => turn.end?.seq === seq)
             const messageId = turn?.data.get('turn-tail')?.closing?.finalNode.messageId
-            ctx.sessions.fork({ sessionId, atSeq: seq, increaseTitle: true, onCreated: (childId) => {
-              ctx.get('productAnalytics')?.track('branch_session_click', { session_id: childId, parent_session_id: sessionId, ...messageId === undefined ? {} : { parent_message_id: messageId }, click_position: 'footer' })
-            } })
+            return ctx.sessions.fork({ sessionId, atSeq: seq, increaseTitle: true,
+              ...readableHistory === undefined ? {} : { readableHistory }, onCreated: (childId) => {
+                ctx.get('productAnalytics')?.track('branch_session_click', { session_id: childId, parent_session_id: sessionId, ...messageId === undefined ? {} : { parent_message_id: messageId }, click_position: 'footer' })
+              } })
               .then((childId) => { ctx.uiWorkspace.openSession(childId) })
-              .catch(() => {
-                // Fork or child-title failure leaves the source view unchanged.
+              .catch((error: unknown) => {
+                if (readableHistory) throw error
+                // 普通分支失败保留原视图；可读分支由错误卡显示失败并允许重试。
               })
           },
         }
@@ -315,9 +335,9 @@ export function apply(ctx: Context): void {
     return disposeView
   })
 
-  // The quota notice host lives in the frame-wide layer so a notice outlives
-  // the Chat panel that reported it. Its chain child lets a package with a
-  // billing surface claim the one live notice without importing Chat.
+
+
+
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay', id: 'chat.quota-notice', locale: NS,
     children: { 'shell.quota-notice': { kind: 'chain', scope: 'root' } },
@@ -325,7 +345,7 @@ export function apply(ctx: Context): void {
       hooks: { notice: quotaNotice },
       dismissNotice: () => { quotaNoticeHolds.clear(); quotaNotice.set(null) },
       keepNoticeOpen: () => {
-        // Nothing live to retain: later failures must still publish.
+
         if (quotaNotice.getSnapshot() === null) return () => {}
         const token = Symbol('ui-chat quota notice hold')
         quotaNoticeHolds.add(token)
@@ -334,7 +354,7 @@ export function apply(ctx: Context): void {
     }),
   }, QuotaNoticeHost))
 
-  // One dock entry per pill, so a plugin replaces or adds a single pill by id.
+
   const statPillInject = () => ({ hooks: { performanceUsage } })
   ctx.slots.inject('conversation.composer.dock', function* () {
     yield ctx.slots.register({

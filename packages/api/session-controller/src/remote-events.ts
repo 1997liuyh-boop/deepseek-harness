@@ -1,5 +1,6 @@
 /** Session Controller events available to a Remote Event assembly. */
 type SessionControllerRemoteEvent =
+  | 'session/access-changed'
   | 'api-session/activity'
   | 'api-session/added'
   | 'api-session/error'

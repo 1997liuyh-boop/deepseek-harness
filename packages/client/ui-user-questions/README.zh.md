@@ -67,6 +67,8 @@ Web 客户端在聊天输入框旁显示 agent（智能体）的提问。用户�
 <details>
 <summary>实现细节——点击展开</summary>
 
+注入的 `sessions.surface` 识别悬浮球文档；本插件在该文档中通过 `next()` 委托请求，由桌面外壳拥有回答卡片。
+
 本包是一条归属规则：渲染提问是宿主的 UI 能力，拥有该工具则是 agent 的能力，因此 `tool-ask-user` 行属于需要它的各个 preset（以及没有 preset 的 TUI 组装）。
 
 ### 重新打开面板

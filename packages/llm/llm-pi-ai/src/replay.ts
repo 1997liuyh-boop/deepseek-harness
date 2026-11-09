@@ -9,7 +9,7 @@
  */
 
 import { LlmError } from '@deepseek-ai/dsh-llm'
-import type { AssistantMessage as HarnessAssistantMessage, ModelMessageSource, ReplayEnvelope } from '@deepseek-ai/dsh-llm'
+import type { AssistantMessage as HarnessAssistantMessage, GenerateOptions, ModelMessageSource, ReplayEnvelope } from '@deepseek-ai/dsh-llm'
 import type { Api, AssistantMessage, ToolCall, Usage as PiUsage } from '@earendil-works/pi-ai'
 
 /** Per-block half of the pi-ai replay envelope, one entry per content block. */
@@ -32,6 +32,8 @@ export interface PiAiReplayResponse {
   /** Provider-native effort for historical replay; absence is preserved. */
   providerThinkingLevel?: string
   stopReason: AssistantMessage['stopReason']
+  /** 接口、模型及凭据的摘要；缺失的旧记录只用于可读历史转换。 */
+  identity?: string
 }
 
 /** The validated halves of one pi-ai replay envelope. */
@@ -72,9 +74,10 @@ function emptyPiUsage(): PiUsage {
  * removes one.
  * @param message - completed native pi-ai assistant response.
  * @param requestedModel - request identity stored in the assistant source; defaults to the native model.
+ * @param identity - 当前接口和凭据摘要。
  * @returns the versioned lossless-JSON replay projection.
  */
-export function toPiReplayState(message: AssistantMessage, requestedModel = message.model): ReplayEnvelope {
+export function toPiReplayState(message: AssistantMessage, requestedModel = message.model, identity?: string): ReplayEnvelope {
   const response: PiAiReplayResponse = {
     kind: 'pi-ai',
     version: 2,
@@ -85,6 +88,7 @@ export function toPiReplayState(message: AssistantMessage, requestedModel = mess
     ...message.responseId === undefined ? {} : { responseId: message.responseId },
     ...message.providerThinkingLevel === undefined ? {} : { providerThinkingLevel: message.providerThinkingLevel },
     stopReason: message.stopReason,
+    ...identity === undefined ? {} : { identity },
   }
   return {
     response,
@@ -109,6 +113,31 @@ export function toPiReplayState(message: AssistantMessage, requestedModel = mess
   }
 }
 
+/**
+ * 只在请求身份一致时携带原生回放数据，正文与工具调用保持原样。
+ * @param options - 原始请求。
+ * @param identity - 已解析接口和凭据的摘要；未知身份不复用原生数据。
+ * @returns 不含异源签名的独立请求。
+ */
+export function projectReplayIdentity(options: GenerateOptions, identity: string | undefined): GenerateOptions {
+  return { ...options, messages: options.messages.map((message) => {
+    if (message.role !== 'assistant' || message.source.replayState === undefined) return message
+    let state: PiAiReplayState
+    try { state = readReplayState(message.source.replayState) }
+    catch (error: unknown) {
+      if (error instanceof LlmError && error.code === 'INVALID_REPLAY_STATE') return message
+      throw error
+    }
+    if (identity !== undefined && state.response.identity === identity) return message
+    if (message.content.some((block, index) => block.type === 'reasoning' && block.text.trim() === ''
+      && state.blocks[index]?.type === 'reasoning' && state.blocks[index].redacted === true)) {
+      throw new LlmError('This history contains provider-bound encrypted reasoning. Switch back to the original provider and credentials, or start a new conversation with readable history.', 'REPLAY_INCOMPATIBLE')
+    }
+    const { replayState: _replay, ...source } = message.source
+    return { ...message, source }
+  }) }
+}
+
 function invalidReplay(message: string): never {
   throw new LlmError(`invalid pi-ai replay state: ${message}`, 'INVALID_REPLAY_STATE')
 }
@@ -131,6 +160,7 @@ function readReplayState(value: unknown): PiAiReplayState {
   if (response['responseModel'] !== undefined && typeof response['responseModel'] !== 'string') return invalidReplay('responseModel must be a string')
   if (response['responseId'] !== undefined && typeof response['responseId'] !== 'string') return invalidReplay('responseId must be a string')
   if (response['providerThinkingLevel'] !== undefined && typeof response['providerThinkingLevel'] !== 'string') return invalidReplay('providerThinkingLevel must be a string')
+  if (response['identity'] !== undefined && (typeof response['identity'] !== 'string' || !/^[a-f0-9]{64}$/.test(response['identity']))) return invalidReplay('identity must be a SHA-256 digest')
   const blocks = envelope['blocks']
   if (!Array.isArray(blocks)) return invalidReplay('blocks must be an array')
   for (const [index, value] of blocks.entries()) {

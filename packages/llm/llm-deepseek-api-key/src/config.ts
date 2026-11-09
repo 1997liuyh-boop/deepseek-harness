@@ -18,18 +18,23 @@ const OFFICIAL_ORIGIN = new URL(PUBLIC_BASE_URL).origin
 export interface Config extends ProtocolConfig, ModelListingConfig {
   /** Credential reference resolved per request; defaults to DEEPSEEK_API_KEY. */
   apiKeyEnv: Volatile<string>
+  /** 查询模型及验证密钥的超时毫秒数。 */
+  discoveryTimeoutMs: Volatile<number>
 }
 export const Config = z.object({
   ...deepSeekConfigFields,
   ...modelListingConfigFields,
   apiKeyEnv: z.string().role('credential-ref').default('DEEPSEEK_API_KEY').volatile(),
+  discoveryTimeoutMs: z.number().min(1).max(120000).default(15000).volatile(),
 })
 /** Plain deployment inputs for the API-key provider. */
-export type Options = ProtocolOptions & ModelListingOptions & { apiKeyEnv?: string }
+export type Options = ProtocolOptions & ModelListingOptions & { apiKeyEnv?: string; discoveryTimeoutMs?: number }
 /** Endpoint and credential reference captured from the same configuration generation. */
 export interface ResolvedDeepSeekOptions extends DeepSeekConnectionOptions {
   /** Credential reference used only for this connection snapshot. */
   apiKeyEnv: CredentialRef
+  /** 本次目录查询的超时毫秒数。 */
+  discoveryTimeoutMs: number
   /**
    * The official `/models` listing this generation follows; absent when `models`
    * differs from the built-in catalog or the endpoint is not the official API.
@@ -41,7 +46,7 @@ export interface ResolvedDeepSeekOptions extends DeepSeekConnectionOptions {
  * @returns detached resolver inputs.
  */
 export function plainOptions(config: Config): Options {
-  return { ...protocolOptions(config), apiKeyEnv: config.apiKeyEnv.get() }
+  return { ...protocolOptions(config), apiKeyEnv: config.apiKeyEnv.get(), discoveryTimeoutMs: config.discoveryTimeoutMs.get() }
 }
 /** Resolve API-key, listing, and protocol settings together.
  * @param config - raw deployment settings.
@@ -55,6 +60,7 @@ export function resolveAdapterOptions(config: Options, environment?: LaunchEnvir
   const listed = new URL(connection.baseURL).origin === OFFICIAL_ORIGIN && isBuiltInCatalog(connection.models)
   return {
     ...connection,
+    discoveryTimeoutMs: config.discoveryTimeoutMs ?? 15000,
     apiKeyEnv: credentialRef(apiKeyEnv ?? 'DEEPSEEK_API_KEY'),
     ...listed ? { listing: { url: modelListingURL(connection.baseURL), ...timing } } : {},
   }

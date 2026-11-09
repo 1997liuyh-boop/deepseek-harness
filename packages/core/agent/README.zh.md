@@ -25,6 +25,10 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
+`agent/resolve-model` 在提示词组装前解析模型选择意图，使提示词与请求使用同一真实路由。恢复拥有者可在委派专用恢复前清空 `agent/request-error.retryPolicy`，避免供应商执行器叠加另一套重试策略。
+
+在存在实时 agent 的任何地方挂载 `dsh-agent`：它提供 `ctx.agents` 以及插件、UI、钩子和编排器所面向编程的 `Agent` 句柄。在没有驱动器注册工厂之前，该服务保持惰性——随附驱动器是 `dsh-agent-loop`，因此最小的可用组合需要同时加载两者。
+
 将 `dsh-agent` 与 `dsh-session-projection` 一起挂载：它提供 `ctx.agents`、`Agent` 句柄，以及读取已记录轮次和步骤位置的 `turnBoundaryOf(session)`。创建或恢复 Agent 还需要驱动器注册工厂；随附驱动器是 `dsh-agent-loop`。 [Session 模型选择](#model-selection) 通过每个句柄的 `agent.model` 提供。
 
 ### 创建或恢复 agent
@@ -45,7 +49,7 @@ await handle.dispose()   // stops the loop, unregisters, removes the session, un
 <a id="model-selection"></a>
 ### 选择模型
 
-`agent.model` 实现 `Model` 接口，与 `agent.inbox` 并列。`current()` 返回选择的独立副本：依次读取待生效选择、最近请求的选择和实时 `agent.options`；没有来源同时提供 provider 与 model 时返回 `undefined`。读取不会固定选择，也不会改变已经准备的步骤。
+`agent.model` 与 `agent.inbox` 一起实现 Agent 上的模型选择。`current()` 返回独立副本，依次读取待用选择、最近明确选择、最近请求所用选择及实时 `agent.options`；没有完整 provider/model 时返回 `undefined`。读取不会固定选择或修改已准备步骤。备用请求头更新实际所用路由，不覆盖明确选择。投影缓存版本 4 会从会话日志重建此状态。
 
 `select({ provider, model, reasoningEffort? })` 完整赋值，从下一个尚未开始准备的步骤生效。省略强度表示使用适配器默认值；选择操作既不继承旧强度，也不查询默认值。与已记录选择相同则不重复记录，但仅与初始 options 相同仍会记录 `model/selection`。调用方负责校验可用性与能力；追加失败沿用 Session 现有的失败保证。
 

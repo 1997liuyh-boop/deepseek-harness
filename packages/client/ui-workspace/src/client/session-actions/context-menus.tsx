@@ -52,6 +52,10 @@ export function registerSessionMenus(ctx: Context, actions: Actions): void {
     id: 'fork', label: t('menu.fork'), icon: { key: 'workspace.fork' }, commandId: 'session.fork' as ShortcutCommandId,
     run: () => { actions.forkSession(target.sessionId) },
   }] : [])
+  register('fork-readable', 310, ['session/fork'], target => allowed(target, 'session/fork') ? [{
+    id: 'fork-readable', label: t('menu.forkReadable'), icon: { key: 'workspace.fork' },
+    run: () => { actions.forkSession(target.sessionId, true) },
+  }] : [])
   register('id', 450, [], target => [{
     id: 'copy', label: t('menu.sessionId'), icon: { key: 'workspace.copy' }, separatorBefore: true,
     run: () => actions.copySessionId(target.sessionId),

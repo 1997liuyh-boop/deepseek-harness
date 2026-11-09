@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Computer-use providers let models observe and operate a desktop. This group contains the shared registry that prevents multiple providers from being enabled in one composition. DSH's [CUA implementation](../experimental/cua/README.md), platform providers, and opt-in bundle currently live in `experimental`, alongside the Cua Driver adapters. The CUA package documents the platform requirements for promotion to this group.
+Computer-use packages let models observe and operate a desktop. This group owns Desktop's scoped GUI tools and the shared registry that prevents multiple providers from being enabled in one composition. DSH's [CUA implementation](../experimental/cua/README.md), platform providers, and opt-in bundle currently live in `experimental`, alongside the Cua Driver adapters. The CUA package documents the platform requirements for promotion to this group.
 
 ## Table of Contents
 
@@ -27,6 +27,7 @@ Choose one provider and mount the shared registration service.
 | Package | Role | ctx key |
 |---|---|---|
 | [`computer-use`](computer-use/README.md) | Exclusive named provider registration | `ctx.computerUse` |
+| [`tool-computer-use`](tool-computer-use/README.md) | Desktop Computer Use preset, GUI tools and background code agents | `ctx.tools` |
 
 <a id="related-documentation"></a>
 ## Related documentation

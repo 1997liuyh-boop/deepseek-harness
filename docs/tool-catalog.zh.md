@@ -19,6 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
+| `@deepseek-ai/dsh-tool-computer-use` | `click`, `drag`, `hotkey`, `input_text`, `list_apps`, `long_press`, `long_wait`, `open_app`, `open_in_browser`, `open_in_finder`, `screenshot`, `scroll`, `wait` | `ctx.tools`, `ctx.systemPrompt`, `ctx.attachments`, `ctx.sessionProjections` | `tool/call`, `tool/result`, `computer-use/coordinate-mode`, `image attachments` | - | 默认插件注册桌面观察和输入工具。本目录通过不执行桌面操作的后端采集工具 schema；可选的 code-agent 插件使用独立入口。 |
 | `@deepseek-ai/dsh-plugin-manager` | `plugin_manager` | `ctx.tools`, `ctx.pluginManager`, `ctx.sandboxPolicy` | `tool/call`, `tool/result`, `user/message` | - | - |
 | `@deepseek-ai/dsh-plugin-market` | `plugin_market` | `ctx.tools`, `ctx.pluginMarket` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-mcp-resources` | `list_mcp_resource_templates`, `list_mcp_resources`, `read_mcp_resource` | `ctx.tools`, `ctx.mcpResources` | `tool/call`, `tool/result` | - | - |
@@ -54,6 +55,381 @@
 | `@deepseek-ai/dsh-tool-workflow` | `workflow` | `ctx.tools`、`ctx.workflowEngine`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents the script children)` | `tool/call`、`tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-workspace-dependencies` | `load_workspace_dependencies` | `ctx.tools` | `tool/call`, `tool/result` | - | - |
 | `@deepseek-ai/dsh-tool-web` | `web_fetch`、`web_search` | `ctx.tools`、`ctx.web`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | web_search 和 web_fetch 将提供方选择置于 ctx.web 之后，使模型可见 schema 在更换后端时保持稳定。 |
+
+<a id="deepseek-aidsh-tool-computer-use"></a>
+
+## `@deepseek-ai/dsh-tool-computer-use`
+
+### `click`
+
+在附带的最前方窗口截图上，点击以 0–1000 表示的位置，然后返回操作后的截图。使用左键（默认）或右键；count 为 2 表示双击。可选修饰键（shift、cmd、option、control）仅在本次点击期间按住。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "button": {
+      "type": "string",
+      "description": "Mouse button. Default: left.",
+      "default": "left",
+      "enum": [
+        "left",
+        "right"
+      ]
+    },
+    "count": {
+      "type": "integer",
+      "description": "1 for a single click, 2 for a double-click. Default: 1.",
+      "default": 1,
+      "enum": [
+        1,
+        2
+      ]
+    },
+    "modifiers": {
+      "type": "array",
+      "description": "Modifier keys held only for this click, for example [\"shift\"] or [\"cmd\"]. Omit for a plain click.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "screen_index",
+    "position"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `drag`
+
+在附带的最前方窗口截图上，从以 0–1000 表示的起点拖到终点，然后返回操作后的截图。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "start_screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "start_position": {
+      "type": "array",
+      "description": "[x, y] start as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "end_screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "end_position": {
+      "type": "array",
+      "description": "[x, y] end as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    }
+  },
+  "required": [
+    "start_screen_index",
+    "start_position",
+    "end_screen_index",
+    "end_position"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `hotkey`
+
+在桌面按下组合键，然后返回操作后的截图。拒绝系统截图快捷键（Cmd/Win+Shift+3/4/5）。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "keys": {
+      "type": "array",
+      "description": "Key names in order, for example [\"cmd\", \"c\"].",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "keys"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `input_text`
+
+在附带的最前方窗口截图上，点击以 0–1000 表示的位置以获取焦点，输入文字，可选择替换现有内容并按 Enter，然后返回操作后的截图。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels; the click focuses the field.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "text": {
+      "type": "string",
+      "description": "Characters to type after the focus click."
+    },
+    "replace": {
+      "type": "boolean",
+      "description": "When true, select all in the focused field before typing. Default: false.",
+      "default": false
+    },
+    "submit": {
+      "type": "boolean",
+      "description": "When true, press Enter after typing. Default: false.",
+      "default": false
+    }
+  },
+  "required": [
+    "screen_index",
+    "position",
+    "text"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `list_apps`
+
+按显示名称列出正在运行的常规应用（在 Dock 中可见），然后返回当前最前方窗口截图。附带窗口属于错误应用时使用。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `long_press`
+
+在附带的最前方窗口截图上，在以 0–1000 表示的位置按住鼠标左键，然后返回操作后的截图。duration_seconds 默认为 3，取值必须为 1–10。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "Hold duration in seconds. Default: 3. Must be 1–10.",
+      "default": 3
+    }
+  },
+  "required": [
+    "screen_index",
+    "position"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `long_wait`
+
+暂停 10、30、60 或 120 秒，然后在不移动指针的情况下返回最新的最前方窗口截图。仅用于下载、安装、导出或屏幕上生成等可见的长任务。选择能够覆盖剩余进度的最小 wait_seconds；只有截图已显示任务将持续数分钟时才选 120。普通加载使用 wait。不要用于 code_agent。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "wait_seconds": {
+      "type": "integer",
+      "description": "Seconds to pause. Must be 10, 30, 60, or 120.",
+      "enum": [
+        10,
+        30,
+        60,
+        120
+      ]
+    }
+  },
+  "required": [
+    "wait_seconds"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `open_app`
+
+激活正在运行的应用，或按显示名称或 bundle id 启动应用，然后返回操作后的截图。附带窗口属于错误应用时使用。不要点击 Dock。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Localized application name or bundle identifier, for example Pages or com.apple.TextEdit."
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `open_in_browser`
+
+打开默认浏览器，或在其中打开完整的 http(s) URL，然后返回操作后的截图。这是用户可见的浏览器，不要用 web_fetch 代替。路径或查询中的中文必须使用原文，不要使用 %E5... / %E8... 等 CJK 百分号编码。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "url": {
+      "type": "string",
+      "description": "http(s) URL to open. Omit to launch the default browser with no page."
+    }
+  }
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `open_in_finder`
+
+在 Finder 中打开文件夹、用默认应用打开文件，或在 Finder 中显示文件，然后返回操作后的截图。省略 path 时打开桌面。只有需要在 Finder 中选中文件（用于“打开方式”或重命名、移动）时才使用 reveal_only。传入真实路径，不要从截图中 OCR 识别路径。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute or ~ path. Omit to open the user Desktop."
+    },
+    "reveal_only": {
+      "type": "boolean",
+      "description": "When true and path is a file, reveal it in Finder instead of opening it. Default: false.",
+      "default": false
+    }
+  }
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `screenshot`
+
+将当前最前方窗口截图保存到用户桌面，并复制到剪贴板。返回保存的文件路径。执行 bash、搜索或 web_fetch 后，调用本工具刷新最前方窗口。执行点击、输入、等待或打开后不要再次调用，因为这些结果已附带窗口截图。用户要求截图文件，或需要将图片放入剪贴板以便粘贴时使用。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `scroll`
+
+在附带的最前方窗口截图上，在以 0–1000 表示的位置向上或向下滚动，然后返回操作后的截图。scroll_level 的取值为 1–10。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "screen_index": {
+      "type": "integer",
+      "description": "0 for the attached frontmost-window screenshot."
+    },
+    "position": {
+      "type": "array",
+      "description": "[x, y] as a 0–1000 fraction of that screenshot, not pixels.",
+      "items": {
+        "type": "number"
+      }
+    },
+    "direction": {
+      "type": "string",
+      "description": "Scroll direction.",
+      "enum": [
+        "up",
+        "down"
+      ]
+    },
+    "scroll_level": {
+      "type": "integer",
+      "description": "Scroll magnitude from 1 (smallest) to 10 (largest)."
+    }
+  },
+  "required": [
+    "screen_index",
+    "position",
+    "direction",
+    "scroll_level"
+  ]
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+### `wait`
+
+暂停 1 秒，然后在不移动指针的情况下返回最新的最前方窗口截图。用于页面刷新、加载指示器或尚未出现的控件。不要用于 code_agent。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/computer-use/tool-computer-use/src/plugin.ts`](../packages/computer-use/tool-computer-use/src/plugin.ts)
+
+默认插件注册桌面观察和输入工具。本目录通过不执行桌面操作的后端采集工具 schema；可选的 code-agent 插件使用独立入口。
 
 <a id="deepseek-aidsh-plugin-manager"></a>
 

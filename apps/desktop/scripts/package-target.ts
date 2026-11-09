@@ -1,4 +1,4 @@
-/** Build one release target with matching Electron and dsh architecture. */
+
 
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
@@ -44,13 +44,13 @@ const DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES = new Set([
   'DOWNLOAD_PROD_COS_SECRET_KEY',
 ])
 
-/** `--build-version` value that numbers a build after the ones already taken. */
+
 const AUTOMATIC_BUILD_VERSION = 'auto'
 
-/** Fixed platform and architecture identifiers exposed by package scripts. */
+
 export type DesktopPackageTargetName = 'mac-arm64' | 'mac-x64' | 'win-x64'
 
-/** One supported release target and its electron-builder selectors. */
+
 export interface DesktopPackageTarget {
   readonly name: DesktopPackageTargetName
   readonly platform: 'darwin' | 'win32'
@@ -83,25 +83,25 @@ const TARGETS: Record<DesktopPackageTargetName, DesktopPackageTarget> = {
   },
 }
 
-/**
- * Remove Windows signing configuration from package preparation subprocesses.
- * @param environment - Packaging command environment.
- * @returns A copy without Windows signing fields.
- */
+
+
+
+
+
 export function withoutWindowsSigningEnvironment(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(environment)
     .filter(([name]) => !name.startsWith(WINDOWS_SIGNING_ENV_PREFIX)))
 }
 
-/**
- * Select signing mode and strip unsigned-build credentials for packaging subprocesses.
- * @param environment - Target packaging environment.
- * @param unsigned - Whether to create a local artifact without release signing or notarization.
- * @returns Packaging environment without certificate inputs for unsigned builds.
- */
+
+
+
+
+
+
 export function desktopElectronBuilderEnvironment(environment: NodeJS.ProcessEnv, unsigned: boolean): NodeJS.ProcessEnv {
   const selected: NodeJS.ProcessEnv = { ...environment, DSH_DESKTOP_UNSIGNED: unsigned ? '1' : '0' }
-  // The bundled NSIS decoder cannot extract 7-Zip's automatic ARM64-filtered entries.
+
   if (environment.DSH_DESKTOP_TARGET_PLATFORM === 'win32') selected.ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
   if (!unsigned) return selected
   return {
@@ -112,11 +112,11 @@ export function desktopElectronBuilderEnvironment(environment: NodeJS.ProcessEnv
   }
 }
 
-/**
- * Remove upload-only COS credentials from every packaging subprocess.
- * @param environment - Packaging command environment.
- * @returns A copy without Desktop upload credentials.
- */
+
+
+
+
+
 export function withoutDesktopUploadCredentials(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(environment)
     .filter(([name]) => !DESKTOP_UPLOAD_CREDENTIAL_ENV_NAMES.has(name)))
@@ -156,19 +156,19 @@ function writeReleaseRecord(
     environment: update.environment,
     channel: update.channel,
     publicUrl: update.publicUrl,
-    // Upload reads this to tag the commit a production release was packaged from.
+
     ...packaged === undefined ? {} : { commit: packaged.commit, dirty: packaged.dirty },
   }, null, 2)}\n`)
   renameSync(temporaryPath, recordPath)
 }
 
-/**
- * Resolve a named release target and reject hosts that cannot execute its packaged runtime.
- * @param name - One of the fixed Desktop release target names.
- * @param hostPlatform - Build-host Node.js platform.
- * @param hostArch - Build-host Node.js architecture.
- * @returns The target selectors shared by runtime preparation and electron-builder.
- */
+
+
+
+
+
+
+
 export function resolveDesktopPackageTarget(
   name: string,
   hostPlatform: NodeJS.Platform = process.platform,
@@ -198,9 +198,10 @@ interface DesktopPackageInvocation {
   readonly directory: boolean
   readonly prepareOnly: boolean
   readonly unsigned: boolean
+  readonly local: boolean
   readonly skipNotarization: boolean
   readonly check: boolean
-  /** Build identifier to publish under, when this build does not publish the product version. */
+
   readonly requestedBuildVersion: string | undefined
 }
 
@@ -210,27 +211,28 @@ function hostTargetName(platform: NodeJS.Platform, arch: string): DesktopPackage
   return name
 }
 
-/**
- * Parse the fixed-target packaging command line.
- * @param argv - Arguments after the script entry point.
- * @param hostPlatform - Build-host Node.js platform.
- * @param hostArch - Build-host Node.js architecture.
- * @returns The validated target and whether to emit an unpacked directory.
- */
+
+
+
+
+
+
+
 export function parseDesktopPackageInvocation(
   argv: readonly string[],
   hostPlatform: NodeJS.Platform = process.platform,
   hostArch: string = process.arch,
 ): DesktopPackageInvocation {
   const { values, positionals } = parseArgs({
-    // `pnpm run <script> -- --build-version x` forwards the separator itself, and the script's own
-    // preset arguments come first, so it can land anywhere; parseArgs would read the rest as targets.
+
+
     args: argv.filter(argument => argument !== '--'),
     allowPositionals: true,
     options: {
       dir: { type: 'boolean', default: false },
       'prepare-only': { type: 'boolean', default: false },
       unsigned: { type: 'boolean', default: false },
+      local: { type: 'boolean', default: false },
       'skip-notarization': { type: 'boolean', default: false },
       check: { type: 'boolean', default: false },
       'build-version': { type: 'string' },
@@ -238,6 +240,9 @@ export function parseDesktopPackageInvocation(
   })
   if (positionals.length > 1) throw new Error('desktop package: expected at most one target')
   const name = positionals[0] ?? hostTargetName(hostPlatform, hostArch)
+  if (values.local && (name !== 'win-x64' || !values.unsigned || values['prepare-only'])) {
+    throw new Error('desktop package: --local requires --unsigned on Windows, without --prepare-only')
+  }
   if (values.unsigned && values['prepare-only']) throw new Error('desktop package: --unsigned cannot use --prepare-only')
   if (values['skip-notarization'] && (name === 'win-x64' || values.unsigned || values['prepare-only'])) {
     throw new Error('desktop package: --skip-notarization requires a signed macOS build, without --prepare-only')
@@ -251,19 +256,20 @@ export function parseDesktopPackageInvocation(
     directory: values.dir,
     prepareOnly: values['prepare-only'],
     unsigned: values.unsigned,
+    local: values.local,
     skipNotarization: values['skip-notarization'],
     check: values.check,
     requestedBuildVersion,
   }
 }
 
-/**
- * Build the electron-builder command arguments for one validated target.
- * @param target - Supported release target.
- * @param directory - Whether to stop at an unpacked application directory.
- * @param artifact - Optional single artifact built from an existing signed application.
- * @returns Arguments that keep publishing under the separate validated upload command.
- */
+
+
+
+
+
+
+
 export function desktopElectronBuilderArguments(
   target: DesktopPackageTarget,
   directory: boolean,
@@ -313,13 +319,13 @@ function runPnpm(
   })
 }
 
-/**
- * Resolve the version one run publishes from what its command line asked for.
- * @param invocation - Validated packaging request.
- * @param productVersion - Version the manifests declare.
- * @param environment - Release settings, which name the bucket automatic numbering reads.
- * @returns The product version, the requested version, or the next free index for today.
- */
+
+
+
+
+
+
+
 async function resolveRequestedBuildVersion(
   invocation: DesktopPackageInvocation,
   productVersion: string,
@@ -331,9 +337,9 @@ async function resolveRequestedBuildVersion(
   const paths = desktopTargetBuildPaths(invocation.target.name, environment)
   return suggestDesktopBuildVersion({
     productVersion, target: invocation.target.name,
-    // Machine presets own packaging, not upload credentials; local auto numbering uses existing artifacts.
+
     environment: environment.DSH_PACKAGING_PRESET === undefined ? environment : {},
-    // Unsigned builds land beside the signed output, so numbering has to read the directory this run writes.
+
     artifactsRoot: desktopArtifactOutput(paths, invocation).directory,
   })
 }
@@ -347,11 +353,11 @@ async function main(): Promise<void> {
   const environment = target.platform === 'darwin' && invocation.unsigned
     ? localMacOSPackageEnvironment()
     : loadDesktopPackageEnvironment(target.platform, process.env, APP_ROOT, {
-      unsigned: invocation.unsigned, prepareOnly: invocation.prepareOnly,
+      unsigned: invocation.unsigned, prepareOnly: invocation.prepareOnly, local: invocation.local,
     })
   const productVersion = packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')
-  // Release settings come from the selected configuration files, so the version this run publishes is an
-  // argument; the environment variable below only carries it to the child processes that build.
+
+
   const buildVersion = await resolveRequestedBuildVersion(invocation, productVersion, environment)
   environment[DESKTOP_BUILD_VERSION_ENV] = buildVersion
   if (invocation.check) {
@@ -407,13 +413,13 @@ async function main(): Promise<void> {
   }
 }
 
-/**
- * Prepare one release only after its signing preflight, without publishing from the builder.
- * @param invocation Validated host, target and packaging mode.
- * @param environment File-owned release configuration.
- * @param run Persistent stage supervisor; required for signed Windows packaging and enabled for all release commands.
- * @returns Resolves after preparation or complete packaging; any failed stage prevents a release record.
- */
+
+
+
+
+
+
+
 export async function packageTarget(
   invocation: DesktopPackageInvocation,
   environment: NodeJS.ProcessEnv,
@@ -499,6 +505,7 @@ export async function packageTarget(
       '--pack-destination',
       buildPaths.packedDsh,
     ], buildEnv, REPOSITORY_ROOT)
+    await executePreparation(['--dir', 'packages/computer-use/tool-computer-use', 'pack', '--pack-destination', buildPaths.packedDsh], buildEnv, REPOSITORY_ROOT)
     await executePreparation(['run', 'release:pack', '--family', 'vendor', '--out', buildPaths.packedVendor, ...packArguments], buildEnv, REPOSITORY_ROOT)
     rmSync(buildPaths.packedLandlock, { recursive: true, force: true })
     mkdirSync(buildPaths.packedLandlock, { recursive: true })
@@ -537,7 +544,7 @@ export async function packageTarget(
     await execute(['exec', 'tsx', 'scripts/smoke-packaged-runtime.ts'], targetEnv)
     await withMacOSNotarizationProxy(mac?.notarizationProxy, () => packageMacOSArtifacts({
       arch: target.arch,
-      // electron-builder named these artifacts after the published version, so locating them uses the same identifier.
+
       version: resolveDesktopBuildVersion(environment, packageVersion(join(APP_ROOT, 'package.json'), 'desktop package')),
       artifactsRoot: buildPaths.artifacts,
       environment: electronBuilderEnv,

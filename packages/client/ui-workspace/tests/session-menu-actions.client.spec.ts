@@ -46,6 +46,7 @@ it('preserves built-in order, groups, icons, command identities, and captured ac
     ['session.pin/pin', 'Pin session', true, undefined, undefined, undefined],
     ['session.rename/rename', 'Rename', true, 'session.rename', undefined, undefined],
     ['session.fork/fork', 'Fork session', true, 'session.fork', undefined, undefined],
+    ['session.fork-readable/fork-readable', 'New conversation from readable history', true, undefined, undefined, undefined],
     ['session.id/copy', 'Copy Session ID', true, undefined, true, undefined],
     ['session.archive/archive', 'Archive session', true, 'session.archive', true, true],
   ])
@@ -54,6 +55,7 @@ it('preserves built-in order, groups, icons, command identities, and captured ac
   expect(b.actions.pinSession).toHaveBeenCalledWith('background')
   expect(b.actions.requestSessionRename).toHaveBeenCalledWith('background', 'Background')
   expect(b.actions.forkSession).toHaveBeenCalledWith('background')
+  expect(b.actions.forkSession).toHaveBeenCalledWith('background', true)
   expect(b.actions.copySessionId).toHaveBeenCalledWith('background')
   expect(b.actions.archiveSession).toHaveBeenCalledWith('background')
   const unpin = b.open()

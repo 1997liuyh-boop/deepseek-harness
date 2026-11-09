@@ -1,6 +1,52 @@
 /** Validated platform HTTP messages and restricted browser destinations. */
 import { z } from 'zod'
 import type { AccountBonusOrderId, SignInErrorCode } from '@deepseek-ai/dsh-deepseek-account/types'
+import type { PlatformAccessRequest, PlatformAccessResponse } from '@deepseek-ai/dsh-deepseek-account'
+
+/** 在原请求期限内完成访问验证，且每次最多重试一次被明确拦截的请求。 */
+export class PlatformAccessTransport {
+  private browser = false
+
+  /**
+   * 将浏览器请求提供者限定到配置的平台来源。
+   * @param origin - 唯一允许接收账号请求的平台来源。
+   * @param acquire - 浏览器请求提供者；未安装时返回 undefined。
+   */
+  constructor(private readonly origin: string,
+    private readonly acquire: (request: PlatformAccessRequest, signal: AbortSignal) => Promise<PlatformAccessResponse | undefined>) {}
+
+  /**
+   * 在明确拦截后改用浏览器，后续同来源请求继续使用浏览器。
+   * @param url - 平台接口。
+   * @param init - 原始请求。
+   * @param signal - 原请求的取消和超时信号。
+   * @returns 原响应或浏览器响应；取消后不接纳迟到响应。
+   */
+  async fetch(url: string, init: RequestInit, signal: AbortSignal): Promise<Response> {
+    if (new URL(url).origin !== this.origin) throw new PlatformAuthError('protocol')
+    if (init.body != null && typeof init.body !== 'string') throw new PlatformAuthError('protocol')
+    if (init.method !== undefined && init.method !== 'GET' && init.method !== 'POST') throw new PlatformAuthError('protocol')
+    if (!this.browser) {
+      const response = await fetch(url, { ...init, redirect: 'error', signal })
+      if (!accessBlocked(response)) return response
+      await response.body?.cancel()
+    }
+    const result = await this.acquire({ origin: this.origin, path: new URL(url).pathname,
+      method: init.method === 'POST' ? 'POST' : 'GET', headers: Object.fromEntries(new Headers(init.headers)),
+      ...(init.body == null ? {} : { body: init.body }) }, signal)
+    signal.throwIfAborted()
+    if (result === undefined) throw new PlatformAuthError('access-blocked')
+    if ('errorCode' in result) throw new PlatformAuthError(result.errorCode)
+    this.browser = true
+    return new Response(result.body === '' ? null : result.body, { status: result.status, headers: result.headers })
+  }
+}
+
+function accessBlocked(response: Response): boolean {
+  return ['challenge', 'captcha'].includes(response.headers.get('x-amzn-waf-action') ?? '')
+    || (response.status === 403 && response.headers.get('server') === 'CloudFront'
+      && response.headers.get('content-type')?.includes('text/html') === true)
+}
 
 /** Protocol errors expose a stable code, never a response body or authorization URL. */
 export class PlatformAuthError extends Error {
@@ -88,13 +134,14 @@ export const exchange = z.object({ token: z.string().regex(/^[\x21-\x7e]+$/), au
  * @param body - protocol request, never logged.
  * @param signal - attempt cancellation and timeout.
  * @param headers - validated deployment headers for this origin.
+ * @param transport - 可选的同来源访问验证与单次重试。
  * @returns successful business payload, validated by its caller.
  */
 export async function requestPlatform(origin: string, method: string, body: unknown,
-  signal: AbortSignal, headers: Record<string, string>): Promise<unknown> {
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<unknown> {
   return platformRequest(`${origin}/auth-api/v0/dsh/${method}`, {
     method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body),
-  }, signal)
+  }, signal, transport)
 }
 
 /**
@@ -104,12 +151,13 @@ export async function requestPlatform(origin: string, method: string, body: unkn
  * @param token - account grant.
  * @param signal - credential lifetime and request timeout.
  * @param headers - validated deployment headers for this origin.
+ * @param transport - 可选的同来源访问验证与单次重试。
  * @returns successful business payload.
  */
 export function requestAccount(origin: string, path: '/auth-api/v0/users/current' | '/api/v0/users/get_user_summary',
   token: string,
-  signal: AbortSignal, headers: Record<string, string>): Promise<unknown> {
-  return platformRequest(`${origin}${path}`, { method: 'GET', headers: accountHeaders(headers, token) }, signal)
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<unknown> {
+  return platformRequest(`${origin}${path}`, { method: 'GET', headers: accountHeaders(headers, token) }, signal, transport)
 }
 
 /**
@@ -118,12 +166,13 @@ export function requestAccount(origin: string, path: '/auth-api/v0/users/current
  * @param token - stored account grant.
  * @param signal - credential lifetime and request timeout.
  * @param headers - deployment and client identity headers for this origin.
+ * @param transport - 可选的同来源访问验证与单次重试。
  * @returns successful business payload holding the unnotified bonus list.
  */
 export function requestUnnotifiedBonuses(origin: string, token: string,
-  signal: AbortSignal, headers: Record<string, string>): Promise<unknown> {
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<unknown> {
   return platformRequest(`${origin}/api/v0/users/get_unnotified_bonuses`,
-    { method: 'GET', headers: accountHeaders(headers, token) }, signal)
+    { method: 'GET', headers: accountHeaders(headers, token) }, signal, transport)
 }
 
 /**
@@ -133,14 +182,15 @@ export function requestUnnotifiedBonuses(origin: string, token: string,
  * @param orderId - granted bonus order the user saw.
  * @param signal - credential lifetime and request timeout.
  * @param headers - deployment and client identity headers for this origin.
+ * @param transport - 可选的同来源访问验证与单次重试。
  * @returns successful business payload, which carries no data.
  */
 export function requestBonusNotified(origin: string, token: string, orderId: AccountBonusOrderId,
-  signal: AbortSignal, headers: Record<string, string>): Promise<unknown> {
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<unknown> {
   return platformRequest(`${origin}/api/v0/users/ack_bonus_notified`, {
     method: 'POST', headers: { ...accountHeaders(headers, token), 'content-type': 'application/json' },
     body: JSON.stringify({ order_id: orderId }),
-  }, signal)
+  }, signal, transport)
 }
 
 // The grant is provider-owned; deployment requestHeaders cannot override it or the client identity.
@@ -169,14 +219,22 @@ function callerCancelled(signal: AbortSignal): boolean {
   return signal.aborted && !(reason instanceof Error && reason.name === 'TimeoutError')
 }
 
-async function platformRequest(url: string, init: RequestInit, signal: AbortSignal): Promise<unknown> {
+async function platformRequest(url: string, init: RequestInit, signal: AbortSignal,
+  transport?: PlatformAccessTransport): Promise<unknown> {
   const path = new URL(url).pathname
   let response: Response
   try {
-    response = await fetch(url, { ...init, redirect: 'error', signal })
-  } catch {
+    response = transport === undefined ? await fetch(url, { ...init, redirect: 'error', signal })
+      : await transport.fetch(url, init, signal)
+  } catch (error) {
+    if (error instanceof PlatformAuthError) throw error
     if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, errorCode: 'no-response', aborted: signal.aborted })
     throw new PlatformAuthError('no-response')
+  }
+  if (accessBlocked(response)) {
+    if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'access-blocked' })
+    await response.body?.cancel()
+    throw new PlatformAuthError('access-blocked')
   }
   if (response.status === 401 && new Headers(init.headers).has('x-dsh-auth-token')) {
     if (!callerCancelled(signal)) console.error('[deepseek-account] request failed', { path, status: response.status, errorCode: 'expired' })

@@ -146,7 +146,7 @@ export type PreStepDecision =
   }
 
 /** Action returned by a listener that owns model-request recovery. */
-export type RequestErrorAction = { kind: 'retry' } | undefined
+export type RequestErrorAction = { kind: 'retry'; refreshPrompt?: true } | undefined
 
 /** Why a session lifecycle began; seeded creates are `startup`, while persisted loads are `resume`. */
 export type SessionStartSource = 'startup' | 'resume' | 'clear' | 'compact'
@@ -381,7 +381,7 @@ declare module '@deepseek-ai/cordis' {
      * @param payload.step - the step containing the failed request attempt.
      * @param payload.provider - the provider selected for the failed request.
      * @param payload.failure - serializable facts normalized at the final adapter boundary.
-     * @param payload.retryPolicy - the policy of the adapter registration that served the failed request.
+       * @param payload.retryPolicy - 请求所属适配器的重试策略；拥有重试的中间件可在委派前清空，保留专用恢复并禁用供应商重试。
      * @param payload.signal - the turn abort signal.
      * Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.
      * @mode waterfall

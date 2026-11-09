@@ -17,6 +17,13 @@ import type {
 import type { TypertResource } from '@deepseek-ai/dsh-typert-protocol'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /** 可见会话集合改变；订阅者必须丢弃旧账号缓存。 @mode emit */
+    'session/access-changed'(): void
+  }
+}
+
 /** Identifies one session in the store (and its persistence artifacts). */
 export type SessionId = Branded<'SessionId'>
 

@@ -1,0 +1,12 @@
+version: 1
+scenario: provider-failover
+profile: sdk
+composition: sdk-provider-failover
+recording: authored
+environment:
+  DSH_PERMISSION_MODE: danger-full-access
+header:
+  class: sdk-provider-failover
+  pin: true
+  changes: 1
+  promptChanges: 1

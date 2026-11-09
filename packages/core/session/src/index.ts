@@ -23,6 +23,8 @@ import { ToolHistoryProjection } from './tool-history.ts'
 import type { ToolHistory } from '@deepseek-ai/dsh-llm'
 
 import { buildForkSeed } from './fork.ts'
+import { SessionAccessRegistry } from './access.ts'
+export { SessionAccessError, SessionAccessRegistry } from './access.ts'
 
 export { buildForkSeed } from './fork.ts'
 export * from './types.ts'
@@ -1062,6 +1064,8 @@ export class SessionForkError extends Error {
  * a session published outside that lifecycle persists nothing.
  */
 export class SessionStore extends Service {
+  /** 所有业务消费者共用的会话可见性策略。 */
+  readonly access: SessionAccessRegistry
   private store = new Map<SessionId, SessionEntry>()
   private counter = 0
   private readonly projections: SessionMessageProjection[] = []
@@ -1090,6 +1094,7 @@ export class SessionStore extends Service {
 
   constructor(ctx: Context) {
     super(ctx, 'sessions')
+    this.access = new SessionAccessRegistry(ctx)
     ctx.inject(['typert'], (typeCtx) => {
       typeCtx.typert.lookups.register('session', {
         parameter: 'session',

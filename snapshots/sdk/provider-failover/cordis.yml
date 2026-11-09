@@ -1,0 +1,51 @@
+# SDK 路由场景隔离个人指令、技能及平台专属 shell 工具。
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    includeDefaultRoots: false
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek-api-key'
+  config:
+    thinking: enabled
+    reasoningEffort: max
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: !!js "process.env.DSH_SNAPSHOT === undefined ? 'zstd' : 'none'"
+
+- id: tool-subagent
+  name: '@deepseek-ai/dsh-tool-subagent'
+  config:
+    provider: spawn
+    toolName: subagent
+    maxDepth: 1
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 0
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: llm-routing
+  name: "@deepseek-ai/dsh-llm-routing"
+  config:
+    policy:
+      mode: aggregate
+      routes:
+        - { provider: deepseek-official, model: deepseek-v4-flash }
+        - { provider: deepseek-messages, model: deepseek-v4-pro }
+      defaultIndex: 0
+      retriesPerRoute: 0
+      delayMs: 1
+      budgetMs: 60000
+
+- id: session-title-llm
+  disabled: true

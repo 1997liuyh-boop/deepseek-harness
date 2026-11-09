@@ -60,6 +60,8 @@ PlatformSession 是 getPlatformSession 返回的仅限 Host 快照：origin 指�
 
 AccountDetails.balance 将充值钱包投影为 value、赠送钱包投影为 bonusWallets，分别保留币种和十进制余额字符串。查询失败不包含钱包数组。
 
+PlatformAccessRequest 包含配置来源、固定账号路径、方法、请求头及可选正文。PlatformAccessResponse 包含有界的 HTTP 状态、允许的响应头和文本，或稳定的传输失败码。仅供 Host 使用的 `deepseek-account/platform-access` waterfall 接收请求及原始取消信号；提供者通过浏览器网络栈执行请求，或调用 `next()` 委托。浏览器 Cookie 保留在 Electron 中。资料查询失败携带 `errorCode: 'access-blocked'` 时保留已存授权，供客户端显示验证说明。
+
 赠金通知查询返回 AccountBonusBatch，包含当前 Platform 账号 id 和按服务端顺序排列的可通知订单。AccountBonusNotification 保留服务端消息与到期时间，不投影凭证。确认请求携带预期账号 id 和订单 id；账号变化后 Host 拒绝该请求。两项通知操作都通过 x-client-locale 传递发起界面的语言，不使用语言查询参数。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -456,6 +458,24 @@ An account model request requires the user to sign in.
 ```
 
 Source: [`packages/credentials/deepseek-account/src/types.ts`](../../packages/credentials/deepseek-account/src/types.ts)
+
+<a id="deepseek-accountplatform-access--waterfall"></a>
+
+#### `deepseek-account/platform-access` — waterfall
+
+获取指定平台的浏览器访问验证；无人处理时继续委托。
+
+```ts cordis-catalog
+/** 获取指定平台的浏览器访问验证；无人处理时继续委托。
+ * @mode waterfall
+ * @param request - 来源和路径固定的账号请求，仅供私有通道使用。
+ * @param signal - 原请求的取消和超时信号。
+ * @param next - 委托下一个验证提供者。
+ */
+'deepseek-account/platform-access'(request: PlatformAccessRequest, signal: AbortSignal, next: () => Promise<PlatformAccessResponse | undefined>): Promise<PlatformAccessResponse | undefined>
+```
+
+Source: [`packages/credentials/deepseek-account/src/index.ts`](../../packages/credentials/deepseek-account/src/index.ts)
 
 <a id="deepseek-accountsession-expired--emit"></a>
 

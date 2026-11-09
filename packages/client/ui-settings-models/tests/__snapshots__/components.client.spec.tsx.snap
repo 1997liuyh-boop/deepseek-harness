@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ModelsSection > verifies the saved official credential without sending a new key 1`] = `
+{
+  "action": "Verify API key",
+  "hint": "App-managed means the key is stored locally; it does not mean DeepSeek has validated it. Paste the full secret, not its name or masked value.",
+  "status": "DeepSeek accepted this key for the model directory. Balance and inference permissions may differ.",
+}
+`;

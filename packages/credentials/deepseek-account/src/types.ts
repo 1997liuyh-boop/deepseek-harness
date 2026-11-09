@@ -19,8 +19,9 @@ export type SignInAttemptId = Branded<'SignInAttemptId'>
  * `no-response`: fetch returned no Response; `network`: HTTP or account-detail retrieval failure.
  * `protocol`: invalid response or authorization data; `expired`: authorization expired;
  * `storage`: local credential access or commit failed.
+ * `access-blocked`：平台要求先完成浏览器访问验证。
  */
-export type SignInErrorCode = 'no-response' | 'network' | 'protocol' | 'expired' | 'storage'
+export type SignInErrorCode = 'no-response' | 'network' | 'access-blocked' | 'protocol' | 'expired' | 'storage'
 /** Latest login attempt, including terminal outcomes until the next attempt. */
 export interface SignInAttemptView {
   readonly id: SignInAttemptId
@@ -58,7 +59,8 @@ export interface AccountWallet {
 }
 /** Independent query outcomes allow profile and balance failures to render separately. */
 export interface AccountDetails {
-  readonly profile: { readonly status: 'ready'; readonly value: AccountProfile } | { readonly status: 'failed' }
+  readonly profile: { readonly status: 'ready'; readonly value: AccountProfile }
+    | { readonly status: 'failed'; readonly errorCode?: 'access-blocked' }
   readonly balance: { readonly status: 'ready'; readonly value: readonly AccountWallet[]; readonly bonusWallets: readonly AccountWallet[] } | { readonly status: 'failed' }
 }
 

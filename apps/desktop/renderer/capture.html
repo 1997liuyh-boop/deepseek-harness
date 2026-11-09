@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob:"><title></title><link rel="stylesheet" href="capture.css"></head>
+<body>
+  <canvas id="surface" class="fixed inset-0 h-full w-full touch-none cursor-crosshair"></canvas>
+  <section id="intro" class="capture-panel fixed left-1/2 top-6 flex -translate-x-1/2 flex-col items-center gap-3 px-5 py-3">
+    <div class="flex items-center gap-2"><button id="mode-image" aria-pressed="true"></button><button id="mode-video" aria-pressed="false"></button><button id="exit"></button></div>
+    <p id="hint" class="m-0 text-center text-xs leading-5"></p>
+  </section>
+  <section id="toolbar" class="capture-panel fixed flex max-w-[calc(100vw-24px)] flex-col gap-2 p-2" hidden>
+    <div id="selection-tools" class="flex flex-wrap items-center gap-1.5">
+      <output id="size" class="px-2 text-xs tabular-nums"></output>
+      <div id="annotations" class="flex flex-wrap items-center gap-1.5">
+        <button id="select" aria-pressed="true"></button><button id="rectangle" aria-pressed="false"></button><button id="arrow" aria-pressed="false"></button><button id="text" aria-pressed="false"></button>
+        <input id="color" type="color" value="#ef4444" class="h-8 w-8 cursor-pointer rounded-md border-0 bg-transparent p-0.5">
+        <button id="undo" disabled></button>
+      </div>
+      <button id="reselect"></button><button id="copy" class="capture-primary"></button><button id="image"></button>
+      <label id="audio-option" class="flex items-center gap-1.5 text-xs" hidden><input id="audio" type="checkbox"><span id="audio-label"></span></label>
+      <button id="begin" class="capture-primary" hidden></button><button id="cancel-selection"></button>
+    </div>
+    <div id="recording-tools" class="flex flex-wrap items-center gap-2" hidden>
+      <span id="recording-dot" class="h-2 w-2 rounded-full bg-red-500"></span><span id="recording-label" class="text-sm"></span><output id="timer" class="mr-auto text-sm tabular-nums">00:00</output>
+      <button id="pause"></button><button id="finish" class="capture-primary"></button><button id="cancel"></button>
+    </div>
+    <div id="pending-tools" class="flex flex-wrap gap-2" hidden><button id="save" class="capture-primary"></button><button id="discard"></button><button id="reveal" hidden></button><button id="done"></button></div>
+    <p id="shortcuts" class="m-0 px-2 text-xs text-[var(--dsw-alias-label-secondary)]"></p>
+    <p id="status" class="m-0 max-h-20 overflow-auto whitespace-pre-wrap break-words px-2 text-xs leading-5" role="status" aria-live="polite"></p>
+  </section>
+  <input id="text-editor" class="fixed z-10 box-border h-9 min-w-52 rounded-md border border-solid border-red-500 bg-white px-2 text-base text-black outline-none" hidden>
+  <script src="capture.js"></script>
+</body></html>

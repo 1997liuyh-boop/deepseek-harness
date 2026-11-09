@@ -119,6 +119,8 @@ test('registers into the sidebar', async ({ remote, start }) => {
 
 ### 设计
 
+`TestSessions` 使用与生产控制器相同的查询和外壳协议辅助函数提供 `surface` 与 `overlay`，使注入服务的功能测试保持相同的表面行为。
+
 测试台不复制生产逻辑：它挂载生产 `SlotRegistry`、生产渲染器与 `UiSession` 适配器。`TestSessions` 与 `TestWorkspaces` 实现功能通过 Cordis 消费的 owner 接口，每个 fixture Session 实现 `SessionFace`，`stubConfigForm` 实现 `ConfigForm`。`UiSession` 从这些控制器绑定派生标准渲染器数据源。未 stub 的 `ISession` 行为会携缺失方法名失败。
 
 ### 源码地图

@@ -76,10 +76,10 @@ describe('ModelReasoningEfforts', () => {
     expect(levels()).toEqual(['off', 'low', 'medium', 'high'])
   })
 
-  it('removes the field when switched off and starts from the defaults when switched back on', () => {
+  it('disables catalog inheritance when switched off and restores defaults when enabled', () => {
     const { writes } = renderGroup({ id: 'chat', reasoningEfforts: { off: 'none', high: 'deep' } })
     fireEvent.click(toggle())
-    expect(writes[0]).toEqual({ id: 'chat' })
+    expect(writes[0]).toEqual({ id: 'chat', reasoningEfforts: false })
     fireEvent.click(toggle())
     expect(writes[1]).toEqual({ id: 'chat', reasoningEfforts: DEFAULTS })
   })

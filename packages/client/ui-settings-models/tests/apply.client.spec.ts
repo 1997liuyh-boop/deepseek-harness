@@ -17,12 +17,11 @@ import {
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
 import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
 import { WelcomeNotice } from '../src/client/WelcomeNotice.tsx'
-import type { IndexInjection, WebServer } from '@deepseek-ai/dsh-host-webserver'
-import * as hostPlugin from '../src/index.ts'
+import { Config } from '../src/onboarding-config.ts'
+import type { ImportOperations } from '../src/client/ImportSection.tsx'
+import type { ImportScanToken, ImportCandidateId } from '../src/cc-switch-types.ts'
 import { ONBOARDING_CONFIG_GLOBAL } from '../src/onboarding-config.ts'
 
-/** The Peer an index render speaks for; this listener reads no field of it. */
-const PAGE_PEER = { principal: { kind: 'owner' } } as Parameters<WebServer['renderIndex']>[1]
 
 afterEach(() => { vi.unstubAllGlobals() })
 
@@ -51,6 +50,13 @@ async function bench(mock = RemoteMock.create().load(remoteDefaultResponses), se
     },
     settings: mock.remote.settings,
     session: { initializeDefaultModel: vi.fn(async () => ({ ok: true, value: undefined })) },
+    account: { getProfile: vi.fn(async () => ({ ok: true, value: null })) },
+    ccSwitchImport: {
+      scan: vi.fn(async () => ok({ token: 'scan-test', directory: '/cc-switch', candidates: [], protocols: [] })),
+      models: vi.fn(async () => ok(['model-test'])),
+      commit: vi.fn(async () => ok([])),
+    },
+    directoryPicker: { pick: vi.fn(async () => ok('/cc-switch')) },
   })
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry, locale, remote }
@@ -74,12 +80,7 @@ describe('ui-settings-models apply', () => {
     const { ctx, slots } = await bench()
     declare(slots)
     try {
-      const host = ctx.plugin(hostPlugin, { credentialOnboarding: false })
-      await host.await()
-      const rows: IndexInjection[] = []
-      ctx.emit('webserver/index-inject', rows, PAGE_PEER)
-      expect(rows).toEqual([{ kind: 'global', name: ONBOARDING_CONFIG_GLOBAL, value: { credentialOnboarding: false } }])
-      for (const row of rows) if (row.kind === 'global') vi.stubGlobal(row.name, row.value)
+      vi.stubGlobal(ONBOARDING_CONFIG_GLOBAL, { credentialOnboarding: false })
       const plugin = ctx.plugin({ inject: [...inject], apply })
       await plugin.await()
       expect(slots.entries('settings.onboarding').map(entry => entry.options.id)).toEqual(['welcome-notice', 'deepseek-official'])
@@ -88,18 +89,14 @@ describe('ui-settings-models apply', () => {
       expect(slots.entries('settings.section').map(entry => entry.options.id)).toEqual(['models'])
       await plugin.dispose()
       expect(slots.entries('settings.onboarding')).toEqual([])
-      await host.dispose()
-      const after: IndexInjection[] = []
-      ctx.emit('webserver/index-inject', after, PAGE_PEER)
-      expect(after).toEqual([])
     } finally {
       await ctx.fiber.dispose()
     }
   })
 
   it('defaults to browser onboarding and rejects malformed bootstrap options', async () => {
-    expect(hostPlugin.Config({})).toEqual({ credentialOnboarding: true })
-    expect(hostPlugin.Config['~standard'].validate({ credentialOnboarding: 'false' })).toHaveProperty('issues')
+    expect(Config({})).toMatchObject({ credentialOnboarding: true, ccSwitchImport: { maxProviders: 1000 } })
+    expect(Config['~standard'].validate({ credentialOnboarding: 'false' })).toHaveProperty('issues')
     const { ctx } = await bench()
     try {
       vi.stubGlobal(ONBOARDING_CONFIG_GLOBAL, { credentialOnboarding: 'false' })
@@ -111,9 +108,23 @@ describe('ui-settings-models apply', () => {
 
   it('declares the services it uses', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session',
+      'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings', 'remote.session', 'remote.account',
+      'remote.ccSwitchImport', 'remote.directoryPicker',
       'configForms', 'settingsSchema',
     ])
+  })
+
+  it('页面回调离开插件加载上下文后仍可扫描、查询、提交与选择目录', async () => {
+    const { ctx, slots } = await bench()
+    onTestFinished(() => ctx.fiber.dispose())
+    declare(slots)
+    await ctx.plugin({ inject: [...inject], apply }).await()
+    const entry = slots.entries('settings.models.footer').find(item => item.options.id === 'cc-switch-import')!
+    const { operations } = entry.inject!() as { operations: ImportOperations }
+    expect(await operations.scan('')).toMatchObject({ directory: '/cc-switch', candidates: [] })
+    expect(await operations.models('scan-test' as ImportScanToken, 'candidate-test' as ImportCandidateId, 'https://example.com', 'openai-completions', '')).toEqual(['model-test'])
+    expect(await operations.commit('scan-test' as ImportScanToken, [])).toEqual([])
+    expect(await operations.pick()).toBe('/cc-switch')
   })
 
   it('registers the models nav entry for declarations before or after apply', async () => {
@@ -221,7 +232,7 @@ describe('ui-settings-models apply', () => {
     )
     b.slots.register({ name: 'settings.models.footer', id: 'extra', order: 0 } as never, () => null)
     expect(b.slots.entries('settings.models.provider-card')).toHaveLength(1)
-    expect(b.slots.entries('settings.models.footer')).toHaveLength(1)
+    expect(b.slots.entries('settings.models.footer')).toHaveLength(3)
     // Extension-side HMR safety: its own disposer removes the entry.
     disposeCard()
     expect(b.slots.entries('settings.models.provider-card')).toHaveLength(0)

@@ -253,4 +253,26 @@ Emitted when any prompt provider changes. This registry notification is unfilter
 ```
 
 Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
+
+<a id="system-prompttool-schemas--waterfall"></a>
+
+#### `system-prompt/tool-schemas` — waterfall
+
+在排序前调整已提供的工具说明与参数文本。
+
+```ts cordis-catalog
+/**
+ * 在排序前调整已提供的工具说明与参数文本。
+ * @param schemas - 已收集的工具声明。
+ * @param context - 当前组装上下文。
+ * @param next - 下游声明处理。
+ * @returns 调整后的工具声明。
+ * @mode waterfall
+ */
+'system-prompt/tool-schemas'(schemas: ToolSchema[], context: AssembleContext, next: () => Promise<ToolSchema[]>): Promise<ToolSchema[]>
+```
+
+Types: [ToolSchema](tools.md)
+
+Source: [`packages/core/system-prompt/src/index.ts`](../../packages/core/system-prompt/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -119,6 +119,8 @@ This section explains the design of the bench; the observable behavior is fully 
 
 ### Design
 
+`TestSessions` exposes `surface` and `overlay` through the same query and shell-protocol helpers as the production controller, so injected feature tests share its surface behavior.
+
 The bench copies no production logic: it mounts the production `SlotRegistry`, production renderer, and `UiSession` adapter. `TestSessions` and `TestWorkspaces` implement the owner interfaces that features consume through Cordis, each fixture Session implements `SessionFace`, and `stubConfigForm` implements `ConfigForm`. `UiSession` derives standard renderer sources from those Controller bindings. Unstubbed `ISession` behavior fails with the missing method name.
 
 ### Source map

@@ -25,6 +25,8 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
+`sessions.access` combines disposable visibility policies and invalidates a generation signal before notifying consumers. Business reads and commands enforce these policies; raw persistence remains a maintenance interface. The default registry allows access when no policy is installed.
+
 Mount `dsh-session` wherever a session must exist. It creates and holds event-sourced `Session` instances in memory; durable storage is layered on by a persistence plugin that subscribes to the `session/event` feed.
 
 ### Create and inspect sessions

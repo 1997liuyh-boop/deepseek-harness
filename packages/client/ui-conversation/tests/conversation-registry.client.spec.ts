@@ -6,6 +6,8 @@ import { createAssistantMessage, LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   createScope, MutableSessionEventSource,
+  OVERLAY_READY_MESSAGE_TYPE, OVERLAY_SHELL_ORIGIN, OVERLAY_THEME_MESSAGE_TYPE,
+  overlaySessionId, overlaySessionMessage,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   ISessions, SessionBinding, SessionEventLike, SessionFace, SessionListState, SessionSnapshot,
@@ -89,6 +91,14 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
     [Symbol.dispose]() {},
   }
   const sessions: ISessions = {
+    surface: 'main',
+    overlay: {
+      shellOrigin: OVERLAY_SHELL_ORIGIN,
+      readyMessageType: OVERLAY_READY_MESSAGE_TYPE,
+      themeMessageType: OVERLAY_THEME_MESSAGE_TYPE,
+      sessionId: overlaySessionId,
+      sessionMessage: overlaySessionMessage,
+    },
     list,
     searchResultLimit: 50,
     create: () => Promise.reject(new Error('unused fake Sessions operation')),

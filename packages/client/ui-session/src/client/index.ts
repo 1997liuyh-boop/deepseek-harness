@@ -1,4 +1,4 @@
-/** Session Controller adapter for React selector hooks and Slot scope data. */
+
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type {
   ISessions,
@@ -26,29 +26,35 @@ import type {
   SnapshotSelectorHook,
   StandardSourceBinding,
 } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only service merge for ctx.slots.
+
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { renderSessionArea } from './session-provider.tsx'
 
+
 /** Selector hook over the Session Controller list and current selection. */
 export type UseSessions = SnapshotSelectorHook<SessionListState>
+
 /** Selector hook over one Session's lifecycle and control state. */
 export type SessionSnapshotSelector = SnapshotSelectorHook<SessionSnapshot>
+
 /** Public name for the Session lifecycle selector hook. */
 export type UseSession = SessionSnapshotSelector
 
+
 /** Common identity carried by every Session-scoped pending interaction. */
 export interface SessionPendingInteractionBase {
-  /** Opaque request identity; a replacement request must use a new key. */
+
   readonly key: string
-  /** Domain-owned presentation discriminator. */
+
   readonly kind: string
-  /** Session whose UI can answer this interaction. */
+
   readonly sessionId: SessionId
 }
 
+
 /** Declaration-merged map of domain keys to their pending-interaction values. */
 export interface SessionPendingInteractionMap {}
+
 
 /** Union of every pending-interaction value contributed by the assembled Client. */
 export type SessionPendingInteraction =
@@ -56,52 +62,57 @@ export type SessionPendingInteraction =
     ? SessionPendingInteractionBase
     : SessionPendingInteractionMap[keyof SessionPendingInteractionMap]
 
+
 /** Independent UI status facts for one Session identity. */
 export interface SessionStatus {
-  /** Latest known running state; absent until a baseline or event establishes it. */
+
   readonly running: boolean | undefined
-  /** Highest-precedence domain request currently awaiting user interaction. */
+
   readonly pendingInteraction: SessionPendingInteraction | undefined
-  /** Whether an observed stop outside the main view still needs acknowledgement. */
+
   readonly completionUnread: boolean
 }
 
+
 /** Current UI status indexed by Session identity. */
 export type SessionStatusSnapshot = ReadonlyMap<SessionId, SessionStatus>
+
 /** Selector hook over the unified Session UI status snapshot. */
 export type UseSessionStatus = SnapshotSelectorHook<SessionStatusSnapshot>
 
+
 /** Selector hook for explicit or surrounding-Provider Session reference counts. */
 export interface UseSessionRetainInfo {
-  /**
-   * Read the complete retain information for an explicit Session identity.
-   * @param sessionId - Session identity to inspect without retaining it.
-   * @returns current local reference counts, or absence while the source is unavailable.
-   */
+
+
+
+
+
   (sessionId: SessionId): SessionRetainInfo | undefined
-  /**
-   * Select from the retain information for an explicit Session identity.
-   * @param sessionId - Session identity to inspect without retaining it.
-   * @param selector - projection over the current value.
-   * @param equal - optional selected-value equality.
-   * @returns selected value.
-   */
+
+
+
+
+
+
+
   <Selected>(
     sessionId: SessionId,
     selector: (value: SessionRetainInfo | undefined) => Selected,
     equal?: (left: Selected, right: Selected) => boolean,
   ): Selected
-  /**
-   * Select from the surrounding Provider's Session retain information.
-   * @param selector - projection receiving absence outside a Session binding.
-   * @param equal - optional selected-value equality.
-   * @returns selected value.
-   */
+
+
+
+
+
+
   <Selected>(
     selector: (value: SessionRetainInfo | undefined) => Selected,
     equal?: (left: Selected, right: Selected) => boolean,
   ): Selected
 }
+
 
 /** Publish one pending interaction and define how plugin teardown delegates it. */
 export type PendingInteractionPublisher<T extends SessionPendingInteractionBase> = (
@@ -141,7 +152,7 @@ class PendingInteractionDomain<T extends SessionPendingInteractionBase> {
     }
   }
 
-  /** Remove every pending value and return the operations that settle their owners. */
+
   release(): readonly (() => Promise<void>)[] {
     const delegates = [...this.values.values()].map(entry => entry.delegate)
     this.values.clear()
@@ -155,33 +166,33 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 
   interface GlobalStandardProps {
-    /** Session list and current selection. */
+
     useSessions: UseSessions
     useSessionStatus: UseSessionStatus
     useSessionRetainInfo: UseSessionRetainInfo
-    /** Whether the current Peer may call `action` on one Session resource. */
+
     useSessionAccess: (sessionId: SessionId, action: RemoteEndpoint) => boolean
   }
 
   interface SessionStandardProps {
-    /** Current Session lifecycle and control state. */
+
     useSession: SessionSnapshotSelector
-    /** Current Session identity. */
+
     sessionId: SessionId
-    /** Host-computed projection values addressed by projection key. */
+
     useProjection: UseProjection
-    /** Whether the current Peer may call `action` on this Session resource. */
+
     useAccess: (action: RemoteEndpoint) => boolean
   }
 
   interface SessionMaybeStandardProps {
-    /** Current Session state, absent while no Session is selected. */
+
     useSession: MaybeSnapshotSelectorHook<SessionSnapshot>
-    /** Current Session identity, absent while no Session is selected. */
+
     sessionId: SessionId | undefined
-    /** Host-computed projection values; every key is absent without a Session. */
+
     useProjection: UseProjection
-    /** The bound Session's access answer; `undefined` without a Session, which callers treat as not allowed. */
+
     useAccess: (action: RemoteEndpoint) => boolean | undefined
   }
 }
@@ -194,7 +205,7 @@ declare module '@deepseek-ai/dsh-api-session-controller/client' {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** Session Controller adapter and session-scoped source registry. */
+
     uiSession: UiSession
   }
 }
@@ -204,6 +215,7 @@ type StandardMemberKind = 'hook' | 'keyed hook' | 'prop'
 
 type SessionSourceRecord<Roster extends SessionSourceRoster, Value> =
   Roster extends readonly string[] ? Readonly<Record<Roster[number], Value>> : never
+
 
 /** Bare values produced by one Session-scoped source contribution. */
 export interface SessionSourceContribution<
@@ -216,6 +228,7 @@ export interface SessionSourceContribution<
   readonly props?: SessionSourceRecord<Props, unknown>
 }
 
+
 /** Static roster and per-Session resolver for one standard-props contribution. */
 export interface SessionSourceDescriptor<
   Hooks extends SessionSourceRoster = SessionSourceRoster,
@@ -225,11 +238,11 @@ export interface SessionSourceDescriptor<
   readonly hooks?: Hooks
   readonly keyedHooks?: KeyedHooks
   readonly props?: Props
-  /**
-   * Resolve every declared member for one Session binding.
-   * @param binding - Controller-owned Session binding.
-   * @returns all declared bare sources and stable props.
-   */
+
+
+
+
+
   resolve(binding: SessionBinding): SessionSourceContribution<
     NoInfer<Hooks>,
     NoInfer<KeyedHooks>,
@@ -278,6 +291,7 @@ const BUILTIN_SOURCE = {
   readonly ['sessionId']
 >
 
+
 /** Session-scoped source roster and renderer adapter. */
 export class UiSession extends Service {
   private readonly descriptors: RuntimeSessionSourceDescriptor[] = [
@@ -295,6 +309,7 @@ export class UiSession extends Service {
   private mainRetainId: SessionId | undefined
   private disposeMainRetain = (): void => {}
   private active = true
+
   /** Root source combining running, pending-interaction, and completion-reminder facts. */
   readonly sessionStatus: HostObservable<SessionStatusSnapshot> = {
     getSnapshot: () => this.statusSnapshot,
@@ -303,13 +318,14 @@ export class UiSession extends Service {
       return () => { this.statusListeners.delete(listener) }
     },
   }
+
   /** Renderer-facing adapter for `session` and `session-maybe` scopes. */
   readonly adapter: SlotScopeAdapter
 
-  /**
-   * @param ctx - Client root context.
-   * @param sessions - Controller-owned Session object layer.
-   */
+
+
+
+
   constructor(
     ctx: Context,
     private readonly sessions: ISessions,
@@ -343,6 +359,12 @@ export class UiSession extends Service {
       }
     }, 'ui-session: Session binding projection')
   }
+
+
+
+
+
+
 
   /**
    * Resolve a stable renderer source for an owned Session reference or explicit absence.
@@ -406,6 +428,13 @@ export class UiSession extends Service {
     return () => { void dispose() }
   }
 
+
+
+
+
+
+
+
   /**
    * Register one pending-interaction domain and return its publication function.
    * Domain teardown first removes its visible values, then delegates and awaits
@@ -457,21 +486,39 @@ export class UiSession extends Service {
     return record.source
   }
 
+  private publishingMain = false
+  private publishMainAgain = false
+
   private publishMain(): void {
     if (!this.active) return
-    const byId = this.sessions.list.getSnapshot().byId
-    const currentId = this.current.value.key as SessionId | undefined
-    const currentIsMain = currentId !== undefined
-      && (this.sessions.retainInfo(currentId).getSnapshot().retainedBy.mainView ?? 0) > 0
-    const nextId = currentIsMain
-      ? currentId
-      : Object.values(byId).find(candidate => (candidate.retainedBy.mainView ?? 0) > 0)?.id
-    this.watchMainRetention(nextId)
-    const owner = nextId === undefined ? undefined : this.sessions.binding(nextId)
-    const value = owner === undefined ? this.absent.value : this.sourceFor(owner).value
-    if (this.current.value === value) return
-    this.current.value = value
-    notifySubscribers(this.current.listeners, '[ui-session] main binding')
+    if (this.publishingMain) {
+      if (!this.publishMainAgain) {
+        this.publishMainAgain = true
+        queueMicrotask(() => {
+          this.publishMainAgain = false
+          this.publishMain()
+        })
+      }
+      return
+    }
+    this.publishingMain = true
+    try {
+      const byId = this.sessions.list.getSnapshot().byId
+      const currentId = this.current.value.key as SessionId | undefined
+      const currentIsMain = currentId !== undefined
+        && (this.sessions.retainInfo(currentId).getSnapshot().retainedBy.mainView ?? 0) > 0
+      const nextId = currentIsMain
+        ? currentId
+        : Object.values(byId).find(candidate => (candidate.retainedBy.mainView ?? 0) > 0)?.id
+      this.watchMainRetention(nextId)
+      const owner = nextId === undefined ? undefined : this.sessions.binding(nextId)
+      const value = owner === undefined ? this.absent.value : this.sourceFor(owner).value
+      if (this.current.value === value) return
+      this.current.value = value
+      notifySubscribers(this.current.listeners, '[ui-session] main binding')
+    } finally {
+      this.publishingMain = false
+    }
   }
 
   private watchMainRetention(sessionId: SessionId | undefined): void {
@@ -518,7 +565,7 @@ export class UiSession extends Service {
   private reconcileStatus(): void {
     const list = this.sessions.list.getSnapshot()
     const present = new Set(Object.keys(list.byId) as SessionId[])
-    // Subagent catalog rows and retained subagent fallback rows do not establish Host running state.
+
     for (const id of list.ids) {
       const row = list.byId[id] as SessionSummary
       const previous = this.running.get(id)
@@ -685,13 +732,13 @@ function claimStandardProp(kind: StandardMemberKind, name: string, finalProps: S
   finalProps.add(propName)
 }
 
-/** Required Controller, renderer, Remote, and access services. */
+
 export const inject = ['sessions', 'slots', 'remote', 'remoteAccess']
 
-/**
- * Install the Session root source and scoped adapter.
- * @param ctx - Client Cordis context.
- */
+
+
+
+
 export function apply(ctx: Context): void {
   const service = new UiSession(ctx, ctx.sessions)
   ctx.slots.provideRoot({

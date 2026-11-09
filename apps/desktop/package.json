@@ -4,18 +4,14 @@
   "version": "0.2.2-rc.1",
   "private": true,
   "license": "MIT",
-  "author": {
-    "name": "Hangzhou DeepSeek Artificial Intelligence Co., Ltd."
-  },
   "type": "module",
   "main": "lib/main.js",
   "scripts": {
     "test:installer": "node scripts/test-windows-installer.mjs",
-    "build": "tsc -b && pnpm run bundle",
+    "build": "tsc -b && pnpm run bundle && node scripts/build-macos-selection.mjs && node scripts/build-macos-sck-napi.mjs",
     "bundle": "tsdown --config-loader native",
     "dev": "tsx scripts/dev.ts",
     "start": "tsx scripts/dev.ts --skip-build",
-    "test:updates:channels": "pnpm run build && node scripts/test-update-channels.mjs",
     "test:updates:local": "pnpm run build && node scripts/test-local-updater.mjs",
     "prepare:runtime": "tsx scripts/prepare-runtime.ts",
     "render:tray-icon": "tsx scripts/render-tray-icon.ts",
@@ -45,21 +41,27 @@
     "upload:latest:mac:arm64": "tsx scripts/upload-target.ts mac-arm64 --latest",
     "upload:latest:mac:x64": "tsx scripts/upload-target.ts mac-x64 --latest",
     "upload:latest:win:x64": "tsx scripts/upload-target.ts win-x64 --latest",
+    "test:updates:channels": "pnpm run build && node scripts/test-update-channels.mjs",
     "purge:latest": "tsx scripts/upload-target.ts --latest --purge-only"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9",
-    "semver": "^7.8.5",
-    "ws": "^8.21.3",
+    "@deepseek-ai/cordis": "workspace:~",
     "@deepseek-ai/dsh-api-gateway": "workspace:*",
-    "@deepseek-ai/cordis": "workspace:~"
+    "@napi-rs/canvas": "1.0.8",
+    "electron-updater": "^6.8.9",
+    "koffi": "3.1.1",
+    "micromark": "^4.0.2",
+    "micromark-extension-gfm": "^3.0.0",
+    "pdfjs-dist": "6.3.289",
+    "semver": "^7.8.5",
+    "turndown": "7.2.4",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-app-boot": "workspace:*",
     "@deepseek-ai/dsh-client-ui-settings-general": "workspace:*",
     "@deepseek-ai/dsh-client-ui-sidebar-browser": "workspace:*",
     "@deepseek-ai/dsh-home-paths": "workspace:*",
-    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/node-addon-system": "workspace:~",
     "@electron/get": "^5.1.0",
     "@electron/notarize": "2.5.0",
@@ -86,10 +88,15 @@
     "@deepseek-ai/dsh-client-shortcuts": "workspace:*",
     "@deepseek-ai/dsh-atomic-write": "workspace:*",
     "@deepseek-ai/dsh-client-product-analytics": "workspace:*",
+    "@types/turndown": "5.0.6",
+    "@deepseek-ai/dsh-official-bundles": "workspace:*",
     "@deepseek-ai/dsh-plugin-manager": "workspace:*",
     "zod": "4.4.3",
     "@deepseek-ai/dsh-util-file-drag": "workspace:*",
     "@deepseek-ai/dsh-client-ui-file-actions": "workspace:*",
     "tencentcloud-sdk-nodejs-teo": "4.1.330"
+  },
+  "author": {
+    "name": "Hangzhou DeepSeek Artificial Intelligence Co., Ltd."
   }
 }

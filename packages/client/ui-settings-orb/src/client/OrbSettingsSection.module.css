@@ -1,0 +1,194 @@
+/*! tailwindcss v4.3.4 | MIT License | https://tailwindcss.com */
+@layer properties;
+.section {
+  display: flex;
+  max-width: 45rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: var(--dsw-alias-label-primary);
+}
+.title {
+  margin: 0px;
+  font-size: 1.125rem;
+  --tw-font-weight: 600;
+  font-weight: 600;
+}
+.intro {
+  margin: 0px;
+  font-size: 0.8125rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+.banner {
+  margin: 0px;
+  border-radius: 0.625rem;
+  background-color: var(--dsw-alias-bg-module-platform);
+  padding-inline: 0.75rem;
+  padding-block: 0.625rem;
+  font-size: 0.8125rem;
+  --tw-leading: 1.5;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+}
+.error {
+  margin: 0px;
+  font-size: 0.8125rem;
+  color: var(--dsw-alias-label-error);
+}
+.fields {
+  margin: 0px;
+  display: flex;
+  min-width: 0px;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-style: var(--tw-border-style);
+  border-width: 0px;
+  padding: 0px;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 0.875rem;
+  border-style: var(--tw-border-style);
+  border-width: 0.5px;
+  --tw-border-style: solid;
+  border-style: solid;
+  border-color: var(--dsw-alias-border-l4);
+  background-color: var(--dsw-alias-bg-module-platform);
+  padding-inline: 1rem;
+  padding-block: 0.875rem;
+}
+.cardTitle {
+  margin: 0px;
+  font-size: 0.875rem;
+  --tw-leading: 1.5;
+  line-height: 1.5;
+  --tw-font-weight: 600;
+  font-weight: 600;
+}
+.cardDescription {
+  margin: 0px;
+  font-size: 0.75rem;
+  --tw-leading: 1.5;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+.avatarRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.avatar {
+  width: 4.5rem;
+  height: 4.5rem;
+  flex: none;
+  border-radius: 50%;
+  background-color: var(--dsw-alias-bg-layer-3);
+  object-fit: cover;
+  corner-shape: round;
+}
+.avatarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.trigger {
+  display: inline-flex;
+  height: 2.25rem;
+  max-width: min(17.5rem, 100%);
+  cursor: pointer;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 1.125rem;
+  border-style: var(--tw-border-style);
+  border-width: 0px;
+  background-color: var(--dsw-alias-bg-layer-3);
+  padding-inline: 0.875rem;
+  padding-block: 0px;
+  font-size: 0.875rem;
+  --tw-leading: 1.375rem;
+  line-height: 1.375rem;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+}
+.trigger:hover:not(:disabled) {
+  background-color: var(--dsw-alias-interactive-bg-hover);
+}
+.trigger:disabled {
+  cursor: default;
+  opacity: 50%;
+}
+.triggerLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.triggerEffort {
+  flex: none;
+  font-size: 0.75rem;
+  --tw-leading: 1.125rem;
+  line-height: 1.125rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+.chevron {
+  flex: none;
+}
+.empty {
+  margin: 0px;
+  font-size: 0.8125rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+.toggleCopy {
+  display: grid;
+  min-width: 0px;
+  gap: 0.25rem;
+}
+.tccRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.tccName {
+  margin: 0px;
+  font-size: 0.8125rem;
+  --tw-leading: 1.5;
+  line-height: 1.5;
+  --tw-font-weight: 600;
+  font-weight: 600;
+}
+.tccStatus {
+  margin: 0px;
+  font-size: 0.75rem;
+  --tw-leading: 1.5;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+}
+@property --tw-font-weight {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-leading {
+  syntax: "*";
+  inherits: false;
+}
+@property --tw-border-style {
+  syntax: "*";
+  inherits: false;
+  initial-value: solid;
+}
+@layer properties {
+  @supports ((-webkit-hyphens: none) and (not (margin-trim: block))) or ((-moz-orient: inline) and (not (color:rgb(from red r g b)))) {
+    *, ::before, ::after, ::backdrop {
+      --tw-font-weight: initial;
+      --tw-leading: initial;
+      --tw-border-style: solid;
+    }
+  }
+}

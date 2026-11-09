@@ -3,6 +3,10 @@
 import { hostname } from 'node:os'
 import { resolve } from 'node:path'
 import type { Agent } from '@deepseek-ai/dsh-agent'
+import { LibraryError } from '@deepseek-ai/dsh-session-library'
+import type {} from '@deepseek-ai/dsh-llm-routing'
+import type { LibraryState, LibraryCandidate } from '@deepseek-ai/dsh-session-library/types'
+import type { RoutingPolicy } from '@deepseek-ai/dsh-llm-routing/types'
 import type {} from '@deepseek-ai/dsh-fs'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -22,6 +26,7 @@ import {
 } from './agent.ts'
 import { SessionCommandController, hasPromptContent } from './commands.ts'
 import { SessionControlController } from './control.ts'
+import { addressId } from './history.ts'
 import { HistoryController } from './history/controller.ts'
 import { StateController } from './state/controller.ts'
 import { WebController } from './web/controller.ts'
@@ -222,12 +227,15 @@ export class SessionController extends TypertRemoteService {
     ctx.plugin(ArchivedSessionGate)
 
     ctx.on('session/created', (session) => {
+      if (!ctx.sessions.access.allows(session.id)) return
       ctx.emit('api-session/added', this.listState.summaryFor(session))
     })
     ctx.on('session/disposed', (session) => {
+      if (!ctx.sessions.access.allows(session.id)) return
       ctx.emit('api-session/removed', session.id)
     })
     const publishAgentAvailability = ({ agent }: { agent: Agent }): undefined => {
+      if (!ctx.sessions.access.allows(agent.id)) return
       if (ctx.sessions.get(agent.id) === agent.session) {
         ctx.emit('api-session/added', this.listState.summaryFor(agent.session))
       }
@@ -235,13 +243,16 @@ export class SessionController extends TypertRemoteService {
     ctx.on('agent/created', publishAgentAvailability)
     ctx.on('agent/disposed', publishAgentAvailability)
     ctx.on('agent/status', ({ agent, status }) => {
+      if (!ctx.sessions.access.allows(agent.id)) return
       ctx.emit('api-session/status', agent.id, status === 'running')
     })
     ctx.on('agent/error', ({ agent, error }) => {
+      if (!ctx.sessions.access.allows(agent.id)) return
       ctx.emit('api-session/error', agent.id, errorChain(error))
     })
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'user/message' || event.data.source.kind !== 'user') return
+      if (!ctx.sessions.access.allows(session.id)) return
       ctx.emit('api-session/activity', session.id, event.time)
     })
   }
@@ -343,6 +354,81 @@ export class SessionController extends TypertRemoteService {
   @Remote('modelCatalog')
   modelCatalog(): Promise<ModelCatalog> {
     return buildModelCatalog(this.ctx)
+  }
+
+  /**
+   * 读取当前部署的模型路由策略。
+   * @returns 路由插件声明的策略；未加载插件时返回 null。
+   */
+  @Remote
+  routingPolicy(): RoutingPolicy | null { return this.ctx.get('llmRouting')?.describe() ?? null }
+
+  /**
+   * 通过路由插件保存完整模型路由策略；插件缺失时拒绝请求。
+   * @param policy - 直连或聚合模式的完整策略。
+   * @returns 校验并保存后的路由策略。
+   */
+  @Remote
+  saveRoutingPolicy(policy: RoutingPolicy): Promise<RoutingPolicy> {
+    const routing = this.ctx.get('llmRouting')
+    if (routing === undefined) throw new RemoteError('session/routing-unavailable', 'Routing plugin is unavailable', {})
+    return routing.save(policy)
+  }
+
+  /**
+   * 读取当前机器上的会话历史归属状态。
+   * @returns 历史库插件的当前状态；未加载插件时返回 null。
+   */
+  @Remote
+  libraryState(): LibraryState | null { return this.ctx.get('sessionLibrary')?.describe() ?? null }
+
+  /**
+   * 切换当前可见的本机会话历史库；操作失败时返回结构化错误。
+   * @param mode - 未绑定本机历史或当前账号历史。
+   * @returns 切换完成后的历史库状态。
+   */
+  @Remote
+  setLibraryMode(mode: 'local' | 'account'): Promise<LibraryState> {
+    return this.libraryOperation(() => this.requireLibrary().setMode(mode))
+  }
+
+  /**
+   * 列出可以迁入当前账号库的未绑定本机会话。
+   * @returns 可供用户明确选择的完整会话组候选项。
+   */
+  @Remote
+  libraryCandidates(): Promise<LibraryCandidate[]> { return this.requireLibrary().candidates() }
+
+  /**
+   * 备份并迁入明确选定的完整会话组；失败时返回结构化错误。
+   * @param sessionIds - 用户选择的完整父子会话组。
+   * @returns 迁入操作生成并校验的备份身份。
+   */
+  @Remote
+  migrateLibrary(sessionIds: SessionId[]): Promise<string> { return this.libraryOperation(() => this.requireLibrary().migrate(sessionIds)) }
+
+  /**
+   * 根据当前账号的备份恢复会话归属，保留迁入后新增内容。
+   * @param backupId - 属于当前账号的迁入备份身份。
+   * @returns 恢复归属后的历史库状态。
+   */
+  @Remote
+  restoreLibrary(backupId: string): Promise<LibraryState> { return this.libraryOperation(() => this.requireLibrary().restore(backupId)) }
+
+  private async libraryOperation<T>(work: () => Promise<T>): Promise<T> {
+    try { return await work() }
+    catch (error: unknown) {
+      if (error instanceof RemoteError) throw error
+      throw new RemoteError('session/library-operation-failed', 'History operation could not complete; reload before retrying', {
+        reason: error instanceof LibraryError ? error.reason : 'storage',
+      }, { cause: error })
+    }
+  }
+
+  private requireLibrary() {
+    const library = this.ctx.get('sessionLibrary')
+    if (library === undefined) throw new RemoteError('session/library-unavailable', 'History library plugin is unavailable', {})
+    return library
   }
 
   /**
@@ -521,6 +607,12 @@ export class SessionController extends TypertRemoteService {
     return this.commands.cancel(request)
   }
 
+  /** 验证当前历史库权限，并在账号或历史库变更时取消读取。 */
+  private sessionSignal(sessionId: SessionId, signal: AbortSignal): AbortSignal {
+    this.ctx.sessions.access.assert(sessionId)
+    return AbortSignal.any([signal, this.ctx.sessions.access.signal])
+  }
+
   /**
    * Read one cold-safe, message-aligned Session history page.
    * @deprecated Use `events`; this entry point remains for existing Web callers.
@@ -530,6 +622,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('page')
   page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
+    signal = this.sessionSignal(addressId(request.address), signal)
     return this.historyController.events(request, signal)
   }
 
@@ -541,6 +634,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote
   events(request: SessionPageRequest, signal: AbortSignal): Promise<SessionEventsPage> {
+    signal = this.sessionSignal(addressId(request.address), signal)
     return this.historyController.events(request, signal)
   }
 
@@ -552,6 +646,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   observeEvent(request: SessionObserveEventRequest, signal: AbortSignal): AsyncIterable<SessionEventFrame> {
+    signal = this.sessionSignal(addressId(request.address), signal)
     return this.historyController.observeEvent(request, signal)
   }
 
@@ -563,6 +658,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   observeProjections(request: SessionProjectionsRequest, signal: AbortSignal): AsyncIterable<SessionProjectionFrame> {
+    signal = this.sessionSignal(request.sessionId, signal)
     return this.historyController.observeProjections(request, signal)
   }
 
@@ -574,6 +670,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote
   state(request: SessionStateRequest, signal: AbortSignal): Promise<SessionState> {
+    signal = this.sessionSignal(request.sessionId, signal)
     return this.stateController.state(request, signal)
   }
 
@@ -585,6 +682,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   observeState(request: SessionStateRequest, signal: AbortSignal): AsyncIterable<SessionState> {
+    signal = this.sessionSignal(request.sessionId, signal)
     return this.stateController.observeState(request, signal)
   }
 
@@ -596,6 +694,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote
   wait(request: SessionWaitRequest, signal: AbortSignal): Promise<SessionWaitValue> {
+    signal = this.sessionSignal(request.sessionId, signal)
     return this.stateController.wait(request, signal)
   }
 
@@ -608,6 +707,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
+    signal = this.sessionSignal(addressId(request.address), signal)
     return this.webController.follow(request, signal)
   }
 
@@ -619,6 +719,7 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote('projections')
   projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue> {
+    signal = this.sessionSignal(request.sessionId, signal)
     return this.historyController.projections(request, signal)
   }
 
@@ -629,16 +730,17 @@ export class SessionController extends TypertRemoteService {
    */
   @Remote({ mode: 'stream' })
   async *control(signal: AbortSignal): AsyncIterable<SessionControlFrame> {
+    signal = AbortSignal.any([signal, this.ctx.sessions.access.signal])
     for await (const frame of this.controlState.control(signal)) {
       switch (frame.type) {
         case 'baseline': {
           const projections = Object.fromEntries(Object.entries(frame.value.projections)
-            .filter(([sessionId]) => this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId as SessionId })))
+            .filter(([sessionId]) => this.ctx.sessions.access.allows(sessionId as SessionId) && this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId as SessionId })))
           yield { type: 'baseline', value: { ...frame.value, projections } }
           break
         }
         case 'projection':
-          if (this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })) yield frame
+          if (this.ctx.sessions.access.allows(frame.sessionId) && this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })) yield frame
           break
         /* v8 ignore next -- closed control-frame union. */
         default:

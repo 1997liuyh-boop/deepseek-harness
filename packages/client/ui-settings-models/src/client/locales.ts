@@ -90,6 +90,7 @@ export const en = {
   keyBlank: 'Enter the API key, or leave the field empty to keep the stored one.',
   keyBlankNew: 'Enter the API key, or leave the field empty if this provider authenticates another way.',
   keyIllegalCharacters: 'This API key is not in a valid format. Please check it.',
+  keyNotOpenPlatform: 'This is not a DeepSeek Open Platform API key (they start with sk-). It looks like a sign-in token; create a key at platform.deepseek.com → API keys. Browser sign-in lives in Settings → Account.',
   modelIdRequired: 'Model ID is required.',
   modelIdDuplicate: 'Model ID must be unique.',
   modelNameInvalid: 'Display name cannot be empty.',
@@ -139,6 +140,11 @@ export const en = {
   onboardingSave: 'Save and continue',
   onboardingSaving: 'Saving…',
   keyRequired: 'Enter an API key to continue.',
+  keyRejected: 'DeepSeek rejected this API key. Create a new key on the official platform and try again; your stored key was kept.',
+  keyCheckFailed: 'Could not verify this API key. Check your network and try again; your stored key was kept.',
+  keyManagedHint: 'App-managed means the key is stored locally; it does not mean DeepSeek has validated it. Paste the full secret, not its name or masked value.',
+  keyVerify: 'Verify API key',
+  keyVerified: 'DeepSeek accepted this key for the model directory. Balance and inference permissions may differ.',
 }
 
 /** The settings.models namespace key union. */
@@ -234,6 +240,7 @@ export const zh: { [Key in keyof typeof en]: string } = {
   keyBlank: '请输入 API 密钥；留空则保持已存储的密钥。',
   keyBlankNew: '请输入 API 密钥；若该提供商以其他方式鉴权，可以留空。',
   keyIllegalCharacters: '该 API 密钥格式错误，请检查。',
+  keyNotOpenPlatform: '这不是 DeepSeek 开放平台 API Key（应以 sk- 开头），看起来是登录令牌；请到 platform.deepseek.com → API keys 创建密钥。网页登录请使用“设置 → 账号”。',
   modelIdRequired: '模型 ID 不能为空。',
   modelIdDuplicate: '模型 ID 不能重复。',
   modelNameInvalid: '显示名称不能为空。',
@@ -283,10 +290,16 @@ export const zh: { [Key in keyof typeof en]: string } = {
   onboardingSave: '保存并继续',
   onboardingSaving: '保存中…',
   keyRequired: '请输入 API 密钥后继续。',
+  keyRejected: 'DeepSeek 未接受此 API Key，请在开放平台新建密钥后重试；原凭据已保留',
+  keyCheckFailed: '暂时无法验证 API Key，请检查网络后重试；原凭据已保留',
+  keyManagedHint: 'App-managed 只表示密钥由本机保存，不代表官方验证通过。请粘贴完整密钥，不是名称或打码后的内容。',
+  keyVerify: '验证 API Key',
+  keyVerified: '官方模型目录验证通过；余额和推理接口的权限可能不同。',
 }
 
 /** Japanese copy, checked against the English keys. */
 export const ja = {
+  ...en,
   'nav': 'モデル',
   'deepSeekAccount': 'DeepSeekアカウント',
   'title': 'モデル',
@@ -428,6 +441,7 @@ export const ja = {
 
 /** Spanish dictionary, checked against the English keys. */
 export const es = {
+  ...en,
   nav: 'Modelos',
   deepSeekAccount: 'Cuenta DeepSeek',
   title: 'Modelos',
@@ -569,6 +583,7 @@ export const es = {
 
 /** French dictionary, checked against the English keys. */
 export const fr = {
+  ...en,
   nav: 'Modèles',
   deepSeekAccount: 'Compte DeepSeek',
   title: 'Modèles',
@@ -710,6 +725,7 @@ export const fr = {
 
 /** German dictionary, checked against the English keys. */
 export const de = {
+  ...en,
   nav: 'Modelle',
   deepSeekAccount: 'DeepSeek-Konto',
   title: 'Modelle',
@@ -851,6 +867,7 @@ export const de = {
 
 /** Russian dictionary, checked against the English keys. */
 export const ru = {
+  ...en,
   nav: 'Модели',
   deepSeekAccount: 'DeepSeek Аккаунт',
   title: 'Модели',
@@ -992,6 +1009,7 @@ export const ru = {
 
 /** Portuguese dictionary, checked against the English keys. */
 export const pt = {
+  ...en,
   nav: 'Modelos',
   deepSeekAccount: 'DeepSeek Conta',
   title: 'Modelos',

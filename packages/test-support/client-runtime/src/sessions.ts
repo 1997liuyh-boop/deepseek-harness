@@ -3,6 +3,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import {
   createScope, MutableSessionEventSource, scopeOf, SESSION_SEARCH_RESULT_LIMIT,
+  OVERLAY_READY_MESSAGE_TYPE, OVERLAY_SHELL_ORIGIN, OVERLAY_THEME_MESSAGE_TYPE,
+  overlayClientSurface, overlaySessionId, overlaySessionMessage,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
   AgentContext, ISessions, ProjectionsFace, SessionBinding, SessionFace, SessionListState,
@@ -300,6 +302,19 @@ class TestSessionReference implements SessionReference {
  * behavior/calls/stubs) are bench-only surface.
  */
 export class TestSessions implements ISessions {
+  /** 与真实会话服务一致地读取当前页面表面。 */
+  get surface(): 'main' | 'overlay' {
+    return overlayClientSurface() ? 'overlay' : 'main'
+  }
+
+  /** 测试会话服务提供相同的桌面外壳协议。 */
+  readonly overlay: ISessions['overlay'] = {
+    shellOrigin: OVERLAY_SHELL_ORIGIN,
+    readyMessageType: OVERLAY_READY_MESSAGE_TYPE,
+    themeMessageType: OVERLAY_THEME_MESSAGE_TYPE,
+    sessionId: overlaySessionId,
+    sessionMessage: overlaySessionMessage,
+  }
   /** The useSessions catalog feed, independent of view ownership. */
   readonly list: SnapshotStore<SessionListState>
   private readonly records = new Map<SessionId, SessionRecord>()

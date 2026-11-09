@@ -1,7 +1,7 @@
 /** Platform Web profile and wallet queries projected for account UI consumers. */
 import { z } from 'zod'
 import type { AccountBonusNotification, AccountBonusOrderId, AccountDetails, AccountProfile, AccountUserId } from '@deepseek-ai/dsh-deepseek-account/types'
-import { AccountUnauthorizedError, PlatformAuthError, requestAccount, requestBonusNotified, requestUnnotifiedBonuses } from './protocol.ts'
+import { AccountUnauthorizedError, PlatformAuthError, requestAccount, requestBonusNotified, requestUnnotifiedBonuses, type PlatformAccessTransport } from './protocol.ts'
 
 const user = z.object({
   id: z.string().nullish(),
@@ -74,15 +74,19 @@ const queries: { [K in keyof AccountDetails]: {
  * @param token - stored authorization token; response tokens are discarded.
  * @param signal - request and credential lifetime.
  * @param headers - validated deployment headers for the configured origin.
+ * @param transport - 可选的同来源浏览器验证。
  * @returns sanitized query outcome; failure never becomes a zero balance.
  * @throws AccountUnauthorizedError when Platform rejects the stored token with HTTP 401 or response code 40003.
  */
 export async function readAccountDetail<K extends keyof AccountDetails>(field: K, origin: string, token: string,
-  signal: AbortSignal, headers: Record<string, string>): Promise<AccountDetails[K]> {
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<AccountDetails[K]> {
   const query = queries[field]
-  try { return query.parse(await requestAccount(origin, query.path, token, signal, headers)) }
+  try { return query.parse(await requestAccount(origin, query.path, token, signal, headers, transport)) }
   catch (error) {
     if (error instanceof AccountUnauthorizedError) throw error
+    if (field === 'profile' && error instanceof PlatformAuthError && error.code === 'access-blocked') {
+      return { status: 'failed', errorCode: 'access-blocked' }
+    }
     return { status: 'failed' }
   }
 }
@@ -93,11 +97,12 @@ export async function readAccountDetail<K extends keyof AccountDetails>(field: K
  * @param token - captured account grant; the caller has already bound it to the account.
  * @param signal - credential lifetime and request timeout.
  * @param headers - deployment and client identity headers for the configured origin.
+ * @param transport - 可选的同来源浏览器验证。
  * @returns notifications in Platform order; a malformed payload is a protocol failure.
  */
 export async function readUnnotifiedBonuses(origin: string, token: string,
-  signal: AbortSignal, headers: Record<string, string>): Promise<readonly AccountBonusNotification[]> {
-  const parsed = accountPayload(unnotified, await requestUnnotifiedBonuses(origin, token, signal, headers), 'bonus')
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<readonly AccountBonusNotification[]> {
+  const parsed = accountPayload(unnotified, await requestUnnotifiedBonuses(origin, token, signal, headers, transport), 'bonus')
   return parsed.map(row => ({
     ...(row.campaign === undefined ? {} : { campaign: row.campaign }),
     ...(row.amount === undefined ? {} : { amount: row.amount }),
@@ -115,9 +120,10 @@ export async function readUnnotifiedBonuses(origin: string, token: string,
  * @param orderId - granted bonus order the user saw.
  * @param signal - credential lifetime and request timeout.
  * @param headers - deployment and client identity headers for the configured origin.
+ * @param transport - 可选的同来源浏览器验证。
  * @returns after Platform records the acknowledgement; HTTP and business failures throw.
  */
 export async function sendBonusNotified(origin: string, token: string, orderId: AccountBonusOrderId,
-  signal: AbortSignal, headers: Record<string, string>): Promise<void> {
-  await requestBonusNotified(origin, token, orderId, signal, headers)
+  signal: AbortSignal, headers: Record<string, string>, transport?: PlatformAccessTransport): Promise<void> {
+  await requestBonusNotified(origin, token, orderId, signal, headers, transport)
 }

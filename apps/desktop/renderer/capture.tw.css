@@ -1,0 +1,20 @@
+@import "../../../packages/client/ui-theme/src/styles/design-platform.css";
+@import "tailwindcss/theme";
+@import "tailwindcss/utilities";
+@source "./capture.html";
+@source "./capture.js";
+
+:root { font-family: ui-sans-serif, system-ui, sans-serif; }
+html, body { @apply m-0 h-full overflow-hidden; }
+body { @apply bg-[var(--dsw-alias-bg-base)] text-[var(--dsw-alias-label-primary)]; }
+button, select, input { font: inherit; }
+button {
+  @apply box-border inline-flex h-8 min-w-12 shrink-0 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border-[0.5px] border-solid border-[var(--dsw-alias-border-l3)] bg-transparent px-2.5 py-0 text-xs font-normal leading-5 text-inherit transition-colors hover:bg-[var(--dsw-alias-interactive-bg-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--dsw-alias-label-primary)] disabled:pointer-events-none disabled:cursor-default disabled:opacity-50;
+}
+button.capture-primary { @apply border-transparent bg-[var(--dsw-alias-button-primary-fill)] font-medium text-[var(--dsw-alias-label-primary-foreground)] hover:bg-[var(--dsw-alias-button-primary-hover)]; }
+button[aria-pressed='true'] { @apply border-[var(--dsw-alias-label-primary)] bg-[var(--dsw-alias-interactive-bg-hover)]; }
+.capture-panel { @apply box-border rounded-xl border border-solid border-[var(--dsw-alias-border-l3)] bg-[var(--dsw-alias-bg-base)] shadow-xl; }
+body[data-compact] #toolbar { @apply inset-0 max-w-none rounded-none border-0 p-3 shadow-none; -webkit-app-region: drag; }
+body[data-compact] button, body[data-compact] input, body[data-compact] #status { -webkit-app-region: no-drag; }
+body[data-compact] #surface, body[data-compact] #intro { @apply hidden; }
+[hidden] { @apply hidden; }

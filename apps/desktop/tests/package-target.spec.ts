@@ -87,6 +87,17 @@ describe('desktop package target', () => {
       .toThrow(/cannot use --prepare-only/u)
   })
 
+  it('accepts explicit local unsigned Windows packaging and rejects other signing and platform modes', () => {
+    expect(parseDesktopPackageInvocation(['win-x64', '--unsigned', '--local'], 'win32', 'x64'))
+      .toMatchObject({ unsigned: true, local: true })
+    expect(parseDesktopPackageInvocation(['win-x64', '--unsigned'], 'win32', 'x64').local).toBe(false)
+    for (const flags of [['--local'], ['--local', '--unsigned', '--prepare-only']]) {
+      expect(() => parseDesktopPackageInvocation(['win-x64', ...flags], 'win32', 'x64')).toThrow('--local requires --unsigned on Windows')
+    }
+    expect(() => parseDesktopPackageInvocation(['mac-arm64', '--unsigned', '--local'], 'darwin', 'arm64'))
+      .toThrow('--local requires --unsigned on Windows')
+  })
+
   it('removes ambient certificate inputs for unsigned builds and overrides an inherited signing mode', () => {
     const environment = {
       DSH_DESKTOP_APP_ID: 'com.example.desktop',

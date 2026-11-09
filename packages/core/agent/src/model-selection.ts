@@ -1,6 +1,8 @@
 /** Agent-owned model selection, its durable projection, and scoped switch notices.
  * @module @deepseek-ai/dsh-agent/model-selection
  */
+import type { Scoped } from '@deepseek-ai/dsh-scope'
+import type { Agent } from './types.ts'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Model, AgentOptions, PreStepDecision } from './runtime-types.ts'
 import type { ModelSelection } from './types.ts'
@@ -16,7 +18,9 @@ import { z } from 'zod'
  * default again instead of pinning it as a choice.
  */
 export interface ModelSelectionProjectionState {
-  /** Selection used by the latest recorded model request. */
+  /** 最近一次明确选择；备用请求不覆盖此项。 */
+  readonly selected: ModelSelection | null
+  /** 最近一次实际请求使用的模型。 */
   readonly lastUsed: ModelSelection | null
   /** Later recorded selection not yet used by a matching model request. */
   readonly pending: ModelSelection | null
@@ -31,6 +35,25 @@ export interface ModelSelectionProjectionState {
  */
 function toSelection(provider: string, model: string, reasoningEffort: ReasoningEffortId | undefined): ModelSelection {
   return { provider, model, ...reasoningEffort === undefined ? {} : { reasoningEffort } }
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * 在提示词组装前解析真实模型；返回值同时用于提示词和请求。
+     * @param payload.agent - 本次组装所属 Agent。
+     * @param payload.selected - 入口选择的模型。
+     * @param payload.signal - 当前轮次的取消信号。
+     * @param next - 下游选择。
+     * @returns 本次实际使用的模型。
+     * @mode waterfall
+     */
+    'agent/resolve-model'(this: Scoped<Agent>, payload: {
+      agent: Agent
+      selected: ModelSelection | undefined
+      signal: AbortSignal | undefined
+    }, next: () => Promise<ModelSelection | undefined>): Promise<ModelSelection | undefined>
+  }
 }
 
 /**
@@ -71,21 +94,22 @@ const selectionSchema = z.object({
  */
 export const modelSelectionProjectionDefinition: Required<ProjectionDefinition<'modelSelection', ModelSelectionProjectionState>> = {
   key: 'modelSelection',
-  stateVersion: 3,
-  stateSchema: z.object({ lastUsed: selectionSchema, pending: selectionSchema }),
-  init: () => ({ lastUsed: null, pending: null }),
+  stateVersion: 4,
+  stateSchema: z.object({ selected: selectionSchema, lastUsed: selectionSchema, pending: selectionSchema }),
+  init: () => ({ selected: null, lastUsed: null, pending: null }),
   apply: (state, event) => {
     if (event.type === 'model/selection') {
-      return sameModelSelection(state.pending, event.data) ? state : { ...state, pending: event.data }
+      return sameModelSelection(state.selected, event.data) && sameModelSelection(state.pending, event.data)
+        ? state : { ...state, selected: event.data, pending: event.data }
     }
     if (event.type !== 'request/header') return state
     const lastUsed = selectionOfHeader(event.data.header)
     const pending = sameModelSelection(state.pending, lastUsed) ? null : state.pending
-    return sameModelSelection(state.lastUsed, lastUsed) && pending === state.pending ? state : { lastUsed, pending }
+    return sameModelSelection(state.lastUsed, lastUsed) && pending === state.pending ? state : { ...state, lastUsed, pending }
   },
   wire: {
     viewSchema: z.object({ lastUsed: selectionSchema, next: selectionSchema }),
-    view: state => ({ lastUsed: state.lastUsed, next: state.pending ?? state.lastUsed }),
+    view: state => ({ lastUsed: state.lastUsed, next: state.pending ?? state.selected ?? state.lastUsed }),
   },
 }
 
@@ -116,7 +140,7 @@ export class AgentModel implements Model {
 
   private recordedSelection(): ModelSelection | null {
     const state = this.readState()
-    return state.pending ?? state.lastUsed
+    return state.pending ?? state.selected ?? state.lastUsed
   }
 }
 
