@@ -22,6 +22,9 @@ const WM_MOUSEWHEEL = 0x020A
 const MONITOR_DEFAULTTONEAREST = 2
 
 const POINT = koffi.struct('DSH_SEL_POINT', { x: 'int32', y: 'int32' })
+const CURSORINFO = koffi.struct('DSH_SEL_CURSORINFO', {
+  cbSize: 'uint32', flags: 'uint32', hCursor: 'uintptr', ptScreenPos: POINT,
+})
 const MSLLHOOKSTRUCT = koffi.struct('DSH_SEL_MSLL', {
   pt: POINT,
   mouseData: 'uint32',
@@ -39,6 +42,17 @@ const HOOKPROC = koffi.proto('intptr __stdcall DshSelHookProc(int nCode, uintptr
 
 
 const ENUM_WINDOWS_PROC = koffi.proto('int __stdcall DshSelEnumProc(void *hwnd, intptr lParam)')
+
+/** 只认可系统文本光标，隐藏、缩放和无法识别的光标均不允许模拟复制。 */
+function createTextCursorReader(user32: ReturnType<typeof koffi.load>): () => boolean {
+  const cursorInfo = user32.func('int __stdcall GetCursorInfo(_Inout_ DSH_SEL_CURSORINFO *pci)')
+  const loadCursor = user32.func('uintptr __stdcall LoadCursorW(void *hInstance, uintptr lpCursorName)')
+  const textCursor = BigInt(loadCursor(null, 32513) as number | bigint)
+  return () => {
+    const info = { cbSize: koffi.sizeof(CURSORINFO), flags: 0, hCursor: 0 as number | bigint, ptScreenPos: { x: 0, y: 0 } }
+    return textCursor !== 0n && cursorInfo(info) !== 0 && info.flags === 1 && BigInt(info.hCursor) === textCursor
+  }
+}
 
 interface WindowsActivationApi {
   readonly SetForegroundWindow: (hwnd: unknown) => number
@@ -190,6 +204,7 @@ export function activateWindowsPid(pid: number): void {
 export function installWindowsSelectionHooks(dispatch: (message: WindowsSelectionMessage) => void): () => void {
   const user32 = koffi.load('user32.dll')
   const shcore = koffi.load('shcore.dll')
+  const textCursor = createTextCursorReader(user32)
   const CallNextHookEx = user32.func(
     'intptr __stdcall CallNextHookEx(void *hhk, int nCode, uintptr wParam, intptr lParam)',
   )
@@ -208,10 +223,10 @@ export function installWindowsSelectionHooks(dispatch: (message: WindowsSelectio
         const point = dip(user32, shcore, info.pt.x, info.pt.y)
         const kind = Number(wParam)
         if (kind === WM_MOUSEWHEEL) dispatch({ type: 'wheel' })
-        else if (kind === WM_LBUTTONDOWN) dispatch({ type: 'mouse-down', ...point, button: 'left' })
-        else if (kind === WM_LBUTTONUP) dispatch({ type: 'mouse-up', ...point, button: 'left' })
-        else if (kind === WM_RBUTTONDOWN || kind === WM_RBUTTONUP) dispatch({ type: 'mouse-down', ...point, button: 'right' })
-        else if (kind === WM_MBUTTONDOWN || kind === WM_MBUTTONUP) dispatch({ type: 'mouse-down', ...point, button: 'middle' })
+        else if (kind === WM_LBUTTONDOWN) dispatch({ type: 'mouse-down', ...point, button: 'left', textCursor: textCursor() })
+        else if (kind === WM_LBUTTONUP) dispatch({ type: 'mouse-up', ...point, button: 'left', textCursor: textCursor() })
+        else if (kind === WM_RBUTTONDOWN || kind === WM_RBUTTONUP) dispatch({ type: 'mouse-down', ...point, button: 'right', textCursor: textCursor() })
+        else if (kind === WM_MBUTTONDOWN || kind === WM_MBUTTONUP) dispatch({ type: 'mouse-down', ...point, button: 'middle', textCursor: textCursor() })
       }
     } catch {
       // 探测失败仍继续传递鼠标钩子，避免阻断其他应用输入。
@@ -264,6 +279,7 @@ export function productionSelectionProbe(): WindowsSelectionProbe {
   const sequence = user32.func('uint32 __stdcall GetClipboardSequenceNumber()')
   const clipboardOwner = user32.func('uintptr __stdcall GetClipboardOwner()')
   const sendKey = user32.func('void __stdcall keybd_event(uint8 key, uint8 scan, uint32 flags, uintptr extra)')
+  const textCursor = createTextCursorReader(user32)
   return {
     async readSelection(request) {
       const original = foreground() as number | bigint
@@ -275,7 +291,7 @@ export function productionSelectionProbe(): WindowsSelectionProbe {
       request?.signal.throwIfAborted()
       if (foreground() !== original) return undefined
       if (selected !== undefined && (selected.text !== '' || selected.blocked === true)) return selected
-      if (request?.allowCopy !== true) return undefined
+      if (request?.allowCopy !== true || !textCursor()) return undefined
       // 微信兼容开关仅作用于已识别的微信窗口，不向其他应用注入复制快捷键。
       if (selected?.pid !== pid[0] || !['wechat', 'weixin', 'wechatappex'].includes(selected?.processName?.toLowerCase() ?? '')) return undefined
       const text = await copySelectionSafely({

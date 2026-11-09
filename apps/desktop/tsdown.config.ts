@@ -115,6 +115,7 @@ export default defineConfig([
           },
         },
       })
+      execFileSync(process.execPath, [fileURLToPath(new URL('./scripts/build-desktop-plugins.mjs', import.meta.url))], { stdio: 'inherit' })
     },
     outDir: 'lib',
     format: ['esm'],

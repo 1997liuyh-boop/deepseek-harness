@@ -770,8 +770,11 @@ describe('desktop main startup', () => {
       expect(head.status).toBe(200)
       expect(await head.text()).toBe('')
       expect((await handler(new Request('dsh-app://shell/update-dialog.html', { method: 'POST' }))).status).toBe(405)
-      expect((await handler(new Request('dsh-app://shell/%'))).status).toBe(400)
-      expect((await handler(new Request('dsh-app://shell/%2e%2e%2fpackage.json'))).status).toBe(403)
+      expect((await handler(new Request('dsh-app://shell/%'))).status).toBe(404)
+      expect((await handler(new Request('dsh-app://shell/%2e%2e%2fpackage.json'))).status).toBe(404)
+      for (const page of ['floating.html', 'selection-toolbar.html', 'selection-result.html', 'capture.html']) {
+        expect((await handler(new Request(`dsh-app://shell/${page}`))).status).toBe(404)
+      }
       expect((await handler(new Request('dsh-app://shell/missing.html'))).status).toBe(404)
       expect((await handler(new Request('dsh-app://other/update-dialog.html'))).status).toBe(404)
     } finally {

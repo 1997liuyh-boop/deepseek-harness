@@ -14,6 +14,7 @@ Desktop 在原生应用中运行 Harness 工作区。本参考文档说明应用
 
 - [应用概览](#application-overview)
 - [划词工具栏](#selection-toolbar)
+- [原生功能插件](#native-feature-plugins)
 - [终端命令](#terminal-command)
 - [关闭窗口与退出](#closing-the-window-and-quitting)
 - [关键技术决策](#key-technical-decisions)
@@ -60,6 +61,16 @@ Desktop Host 的 Platform API 请求与更新策略请求用相同的 Platform �
 
 悬浮聊天可在 AI 回复时收起。鼠标离开窗口后自动折叠；固定窗口、输入法组合输入、待回答问题和权限提示仍保留展开。悬停复用已加载的头像，不重复调整原生窗口。Windows 无需开启 macOS 的屏幕录制与辅助功能开关；macOS 可从“设置 → 悬浮球”打开对应授权页。
 
+<a id="native-feature-plugins"></a>
+
+## 原生功能插件
+
+悬浮球、划词工具栏、截图和录屏分别为独立 Cordis bundle：`dsh-floating-ball`、`dsh-selection-toolbar`、`dsh-capture`。通过 Desktop 插件管理器安装各自的 Git 仓库，分别启用。它们需要此 Desktop 分支的扩展 API 1；仅 dsh 版本号相同但没有该接口的上游版本无法加载。已有安装见[迁移指南](../../docs/upgrade-guide/v0.2.2-rc.1/desktop-native-plugins/guide.zh.md)。
+
+桌面壳通过经过认证的 Host IPC 加载安装包的 Electron 入口与声明资源。启用和停用均等待 Electron 确认。停用或卸载会先释放窗口、接口和原生监听，再完成操作；已有 profile 文件保留。Host 关闭时卸载扩展，下次启动时重新加载已启用的包。截图和录屏提供独立应用菜单入口，无需悬浮球。划词翻译无需另外两个插件；需要其他插件的动作在对应插件缺席时明确提示。
+
+桌面构建通过[导出脚本](scripts/export-desktop-plugins.mjs)，在忽略跟踪的 `apps/desktop/plugins/` 下生成可独立构建的源码仓库。每个仓库包含 manifest、patch、源码、界面资源、构建脚本及 MIT 许可证。悬浮球 README 声明 fork 自 [mini-yifan/deepseek-harness-orb](https://github.com/mini-yifan/deepseek-harness-orb)。各工作室仍为独立 Host 与 Client 插件，并分别管理服务生命周期。
+
 <a id="selection-toolbar"></a>
 
 ## 划词工具栏
@@ -76,7 +87,7 @@ Desktop Host 的 Platform API 请求与更新策略请求用相同的 Platform �
 
 **导入打印 PDF**保留从微信导出的 PDF 原件，提取可搜索正文，并将每页渲染为保留打印布局的静态 PNG。PDF 上限为 40 MB、100 页，页面图片合计上限为 120 MB。打印图片可能低于原图质量，GIF 动画和视频不随打印保存。**补充图片／视频**添加用户选择的图片和视频原件，使用相对路径引用。支持 PNG、JPEG、GIF、WebP、MP4、MOV、M4V 和 WebM；选择时校验文件签名，不校验视频完整性。每次最多选择 50 个文件，单图上限 25 MB、单视频上限 1 GB，全部附件上限 2 GB。归档的 `media.json` 记录 SHA-256 与逐文件结果；变更过或不可读的文件报告为缺项。视频请通过原播放器导出，并在保存后核对完整播放。应用不检查无关微信缓存或解密媒体。
 
-Windows 优先读取无障碍选区。结果框的**微信兼容取词**开关仅允许在已识别的微信窗口内拖选或双击后、无障碍取词不可用时使用 Ctrl+C。兼容取词会复制选中文字并将其保留在剪贴板中；取词功能不会写回旧剪贴板内容。仅收到来自原进程的非空文字，且手势、前台窗口、剪贴板所有者及序号仍有效时才接受为选区。图片、文件、未知格式和无关剪贴板变更不会被识别为选区。部分微信版本或受保护页面仍可能阻止取词，此时可将复制的文章链接粘贴到归档窗口。
+Windows 优先读取无障碍选区。结果框的**微信兼容取词**开关仅允许在已识别的微信窗口内拖选或双击后、无障碍取词不可用时使用 Ctrl+C。鼠标按下、抬起和实际复制前均须显示系统文本光标；窗口缩放、图片拖动和无法识别的光标不会触发兼容复制。兼容取词会复制选中文字并将其保留在剪贴板中；取词功能不会写回旧剪贴板内容。仅收到来自原进程的非空文字，且手势、前台窗口、剪贴板所有者及序号仍有效时才接受为选区。图片、文件、未知格式和无关剪贴板变更不会被识别为选区。部分微信版本或受保护页面仍可能阻止取词，此时可将复制的文章链接粘贴到归档窗口。
 
 <a id="terminal-command"></a>
 

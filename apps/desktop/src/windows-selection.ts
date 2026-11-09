@@ -2,10 +2,10 @@ import type { SelectionHelperEvent, SelectionMonitor, SelectionMonitorHandlers }
 
 /** 原生钩子转发的真实用户输入。 */
 export type WindowsSelectionMessage =
-  | { readonly type: 'mouse-down' | 'mouse-up'; readonly x: number; readonly y: number; readonly button: 'left' | 'right' | 'middle' }
+  | { readonly type: 'mouse-down' | 'mouse-up'; readonly x: number; readonly y: number; readonly button: 'left' | 'right' | 'middle'; readonly textCursor: boolean }
   | { readonly type: 'wheel' | 'key' }
 
-/** 每次读取持有独立取消信号，兼容复制仅用于真实选择手势。 */
+/** 每次读取持有独立取消信号，兼容复制仅用于文本光标下的选择手势。 */
 export interface WindowsSelectionReadRequest {
   readonly signal: AbortSignal
   readonly point: { readonly x: number; readonly y: number }
@@ -75,8 +75,8 @@ export function startWindowsSelectionMonitor(
   let stopped = false
   let compatibilityCopy = true
   let pending: AbortController | undefined
-  let down: { x: number; y: number } | undefined
-  let lastUp = { x: -100, y: -100, at: 0 }
+  let down: { x: number; y: number; textCursor: boolean } | undefined
+  let lastUp: { x: number; y: number; at: number; textCursor: boolean } | undefined
   const onEvent = (event: SelectionHelperEvent): void => {
     if (event.type === 'selection' && event.pid !== undefined) lastFront = event.pid
     handlers.onEvent(event)
@@ -90,13 +90,14 @@ export function startWindowsSelectionMonitor(
       pending = read
       let allowCopy = false
       if ('button' in message && message.button === 'left') {
-        if (message.type === 'mouse-down') down = { x: message.x, y: message.y }
+        if (message.type === 'mouse-down') down = { x: message.x, y: message.y, textCursor: message.textCursor }
         else {
           const now = Date.now()
-          allowCopy = compatibilityCopy && ((down !== undefined && Math.hypot(message.x - down.x, message.y - down.y) >= 3)
-            || (now - lastUp.at < 500 && Math.hypot(message.x - lastUp.x, message.y - lastUp.y) < 4))
+          const textGesture = down?.textCursor === true && message.textCursor
+          allowCopy = compatibilityCopy && textGesture && ((down !== undefined && Math.hypot(message.x - down.x, message.y - down.y) >= 3)
+            || (lastUp?.textCursor === true && now - lastUp.at < 500 && Math.hypot(message.x - lastUp.x, message.y - lastUp.y) < 4))
           down = undefined
-          lastUp = { x: message.x, y: message.y, at: now }
+          lastUp = { x: message.x, y: message.y, at: now, textCursor: textGesture }
         }
       } else down = undefined
       dispatchWindowsSelectionMessage(message, { onEvent }, probe, excluded,

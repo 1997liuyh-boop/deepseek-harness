@@ -14,6 +14,7 @@ Desktop runs the Harness workspace in a native application. This reference cover
 
 - [Application overview](#application-overview)
 - [Selection toolbar](#selection-toolbar)
+- [Native feature plugins](#native-feature-plugins)
 - [Terminal command](#terminal-command)
 - [Closing the window and quitting](#closing-the-window-and-quitting)
 - [Key technical decisions](#key-technical-decisions)
@@ -60,6 +61,16 @@ Press F12 (Fn+F12 on media-key keyboards), Command+Option+I on macOS, or Ctrl+Sh
 
 The floating chat can collapse while an AI reply continues. Leaving the window folds it unless pinned, typing with an IME, or awaiting a question or permission response. Hover keeps the loaded avatar and avoids repeated native window resizing. Windows needs no macOS Screen Recording or Accessibility switches; macOS opens them from Settings → Floating ball.
 
+<a id="native-feature-plugins"></a>
+
+## Native feature plugins
+
+Floating ball, Selection toolbar, and Screenshot and recording are independent Cordis bundles: `dsh-floating-ball`, `dsh-selection-toolbar`, and `dsh-capture`. Install their Git repositories through the Desktop plugin manager and enable each separately. They require this Desktop fork's extension API 1; an upstream release with the same dsh version but without that API cannot load them. The [migration guide](../../docs/upgrade-guide/v0.2.2-rc.1/desktop-native-plugins/guide.md) covers existing installations.
+
+The shell loads each installed package's Electron entry and declared resources through authenticated Host IPC. Activation and deactivation wait for Electron acknowledgement. Disabling or removing a plugin releases its windows, handlers and native listeners before the operation completes; existing profile files remain. Host shutdown unloads active extensions, and the next Host loads enabled packages again. Screenshot and recording has its own application-menu entry and works without the floating ball. Selection translation works without either companion plugin; actions requiring an absent companion report that requirement.
+
+The desktop build exports independently buildable source repositories under the ignored `apps/desktop/plugins/` directory using [the export script](scripts/export-desktop-plugins.mjs). Each contains its manifest, patch, source, renderer assets, build scripts and MIT license. Floating ball's README credits its fork source, [mini-yifan/deepseek-harness-orb](https://github.com/mini-yifan/deepseek-harness-orb). Studio bundles remain separate Host and Client plugins with their own service lifecycle.
+
 <a id="selection-toolbar"></a>
 
 ## Selection toolbar
@@ -76,7 +87,7 @@ A paid article is detected from the public page's subscription markers: the wind
 
 **Import printed PDF** keeps a PDF exported from WeChat, extracts searchable text, and renders each page to a static PNG preserving its printed layout. PDFs are limited to 40 MB and 100 pages, with 120 MB of rendered pages. Printed images may be lower quality than originals; GIF animation and videos are not preserved in print. **Add images / videos** attaches user-selected image and video originals, using relative references. Supported formats are PNG, JPEG, GIF, WebP, MP4, MOV, M4V and WebM; selection checks file signatures, not video completeness. Up to 50 files per selection, images up to 25 MB, videos up to 1 GB, and 2 GB total attachments are supported. The archive includes SHA-256 values and per-file outcomes in `media.json`; changed or unreadable files are reported as missing. Export videos through their original player and check full playback after saving. The app does not inspect unrelated WeChat caches or decrypt media.
 
-Windows first reads accessible selected text. The result window's **Compatible selection capture for WeChat** switch enables a Ctrl+C fallback for drag or double-click selections only in identified WeChat windows when accessible text is unavailable. This fallback copies selected text and leaves it in the clipboard; selection capture never writes old clipboard data back. Capture accepts only nonempty text from the original process while the gesture, foreground window, clipboard owner and sequence remain unchanged. Images, files, unknown formats and unrelated clipboard changes are ignored for selection. Some WeChat versions or protected pages can still prevent selection; paste the copied article link into the archive window in that case.
+Windows first reads accessible selected text. The result window's **Compatible selection capture for WeChat** switch enables a Ctrl+C fallback for drag or double-click selections only in identified WeChat windows when accessible text is unavailable. The system text cursor must be visible at mouse press, release and immediately before copying; window resizing, image dragging and unrecognized cursors do not trigger this fallback. This fallback copies selected text and leaves it in the clipboard; selection capture never writes old clipboard data back. Capture accepts only nonempty text from the original process while the gesture, foreground window, clipboard owner and sequence remain unchanged. Images, files, unknown formats and unrelated clipboard changes are ignored for selection. Some WeChat versions or protected pages can still prevent selection; paste the copied article link into the archive window in that case.
 
 <a id="terminal-command"></a>
 

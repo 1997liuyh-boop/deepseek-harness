@@ -9,6 +9,7 @@ import type { OrbPermissionPreset } from './orb-permission.ts'
 import type { OrbCoordinateMode } from './millifraction-coordinates.ts'
 import { z } from 'zod'
 import { parsePluginOperationRecord, type PluginOperationRecord, type PluginOperationRunId } from '@deepseek-ai/dsh-plugin-manager/diagnostic'
+import { parseDesktopExtensionEvent, type DesktopExtensionEvent } from './desktop-extensions.ts'
 
 interface ReadyEvent {
   readonly type: 'ready'
@@ -50,6 +51,7 @@ interface SckCaptureEvent {
 }
 
 type DesktopHostEvent = ReadyEvent | FatalEvent | PlatformSessionEvent | OverlayGuardEvent | ObservationFrameEvent | SckCaptureEvent
+  | DesktopExtensionEvent
   | { readonly type: 'starting'; readonly runId: PluginOperationRunId }
   | { readonly type: 'file-drag-resource'; readonly requestId: number; readonly resource: { readonly path: string; readonly sha256: string; readonly size: number } | null; readonly error?: string }
   | { readonly type: 'platform-access'; readonly requestId: number; readonly request: PlatformAccessRequest }
@@ -103,6 +105,8 @@ function isDesktopHostEvent(message: unknown): message is DesktopHostEvent {
   if (typeof message !== 'object' || message === null || !('type' in message)) return false
   const candidate = message as Record<string, unknown>
   switch (candidate.type) {
+    case 'desktop-extension':
+      return parseDesktopExtensionEvent(message) !== undefined
     case 'platform-access': {
       if (!Number.isSafeInteger(candidate.requestId) || typeof candidate.request !== 'object' || candidate.request === null) return false
       const request = candidate.request as Record<string, unknown>
@@ -243,6 +247,8 @@ export class DesktopHostProcess {
     resolve: (response: DesktopHostControlResponse) => void
     reject: (error: Error) => void
   }>()
+  private extensionEvents: Promise<void> = Promise.resolve()
+  private extensionShutdownFailure: Error | undefined
 
 
 
@@ -268,6 +274,7 @@ export class DesktopHostProcess {
    * @param packageManager - Bundled pnpm entry and Node launcher directory, scoped to package operations.
    * @param onPlatformSession - Private credential updates for embedded Platform views.
    * @param onPluginOperation - Optional diagnostic sink; malformed records are ignored without failing the Host.
+   * @param onDesktopExtension - 桌面插件生命周期回调；就绪与停止均等待先前的异步操作完成。
    */
   constructor(
     private readonly node: string,
@@ -285,6 +292,7 @@ export class DesktopHostProcess {
       request: PlatformAccessRequest, signal: AbortSignal,
     ) => Promise<PlatformAccessResponse | undefined>,
     private readonly onPluginOperation?: (record: PluginOperationRecord) => void,
+    private readonly onDesktopExtension?: (event: DesktopExtensionEvent) => void | Promise<void>,
   ) {}
 
 
@@ -304,7 +312,7 @@ export class DesktopHostProcess {
       ...this.packageManager === undefined ? [] : [this.packageManager.pnpm, this.packageManager.nodeBin],
     ], {
       cwd: this.projectDir,
-      env: desktopNodeEnvironment(this.node, undefined, this.environment),
+      env: { ...desktopNodeEnvironment(this.node, undefined, this.environment), DSH_DESKTOP_EXTENSIONS_API: '1' },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     })
     this.child = child
@@ -331,7 +339,28 @@ export class DesktopHostProcess {
         return
       }
       if (message.type === 'starting') this.runId = message.runId
-      else if (message.type === 'ready') this.readyResolve({ url: message.url, injections: message.injections })
+      else if (message.type === 'ready') {
+        void this.extensionEvents.then(() => { this.readyResolve({ url: message.url, injections: message.injections }) })
+          .catch((error: unknown) => { this.fail(error instanceof Error ? error : new Error(String(error))) })
+      }
+      else if (message.type === 'desktop-extension') {
+        this.extensionEvents = this.extensionEvents.then(async () => {
+          let failure: Error | undefined
+          try {
+            if (this.onDesktopExtension === undefined) throw new Error('Desktop extension handler is unavailable')
+            await this.onDesktopExtension(message)
+          } catch (error) { failure = error instanceof Error ? error : new Error(String(error)) }
+          try { await this.acknowledgeExtension(child, message, failure) }
+          catch (error) {
+            failure = new Error('Desktop extension acknowledgement failed', { cause: error })
+          }
+          if (failure !== undefined) {
+            // 故障已报告；后续卸载消息仍须执行，才能释放已加载插件的资源。
+            if (this.stopping) this.extensionShutdownFailure = failure
+            this.fail(failure)
+          }
+        })
+      }
       else if (message.type === 'platform-session') this.onPlatformSession?.(message.session)
       else if (message.type === 'platform-access') {
         const controller = new AbortController()
@@ -509,6 +538,8 @@ export class DesktopHostProcess {
       }
     }
     this.child = undefined
+    await this.extensionEvents
+    if (this.extensionShutdownFailure !== undefined) throw this.extensionShutdownFailure
     if (requireGraceful && (!graceful || child.exitCode !== 0 || !this.shutdownCompleted)) {
 
       throw new DesktopHostUncleanExitError(`desktop update: Host did not complete graceful task teardown (exit ${String(child.exitCode)}, signal ${String(child.signalCode)}, shutdown acknowledged ${String(this.shutdownCompleted)}, graceful deadline exceeded ${String(!graceful)})`)
@@ -529,5 +560,16 @@ export class DesktopHostProcess {
         console.error('desktop host failure listener failed', listenerError)
       }
     }
+  }
+
+  private async acknowledgeExtension(child: ChildProcess, event: DesktopExtensionEvent, error?: Error): Promise<void> {
+    if (!child.connected) throw new Error('Desktop Host disconnected before extension acknowledgement')
+    await new Promise<void>((resolveAck, reject) => {
+      child.send({ type: 'desktop-extension-result', requestId: event.requestId, id: event.id, ok: error === undefined,
+        ...(error === undefined ? {} : { error: error.message }) }, (failure) => {
+        if (failure !== null) reject(failure)
+        else resolveAck()
+      })
+    })
   }
 }

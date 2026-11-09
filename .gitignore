@@ -38,6 +38,7 @@ dist-exe/
 /plugins/
 /docs/superpowers/
 apps/desktop/.desktop-build/
+apps/desktop/plugins/
 apps/desktop/renderer/selection-markdown.js
 python/sdk-runtime/src/deepseek_harness_runtime/runtime/
 python/**/__pycache__/
