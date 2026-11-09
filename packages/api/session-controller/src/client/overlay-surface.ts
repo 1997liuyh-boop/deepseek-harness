@@ -39,25 +39,25 @@ export const OVERLAY_INDEX_HREF = `${OVERLAY_APP_ORIGIN}/index.html?surface=${OV
 
 /** 悬浮球会话切换通知；消息发送者来源由接收入口另行校验。 */
 export interface OverlaySessionMessage {
-  type: typeof OVERLAY_SESSION_MESSAGE_TYPE
+  type: 'dsh.overlay.session'
   sessionId: string
 }
 
 
 /** 桌面外壳同步给悬浮球的明暗主题通知。 */
 export interface OverlayThemeMessage {
-  type: typeof OVERLAY_THEME_MESSAGE_TYPE
+  type: 'dsh.overlay.theme'
   colorScheme: 'light' | 'dark'
 }
 
 /** 通过会话服务提供给界面插件的桌面外壳协议，不要求共享插件运行时模块。 */
 export interface OverlayClientBridge {
   /** 桌面外壳页面的受信任来源。 */
-  readonly shellOrigin: typeof OVERLAY_SHELL_ORIGIN
+  readonly shellOrigin: 'dsh-app://shell'
   /** 悬浮球页面就绪通知的消息类型。 */
-  readonly readyMessageType: typeof OVERLAY_READY_MESSAGE_TYPE
+  readonly readyMessageType: 'dsh.overlay.ready'
   /** 桌面外壳主题同步通知的消息类型。 */
-  readonly themeMessageType: typeof OVERLAY_THEME_MESSAGE_TYPE
+  readonly themeMessageType: 'dsh.overlay.theme'
   /**
    * 为调用方已校验的会话身份添加类型标记。
    * @param value - 已受信任的会话身份。
