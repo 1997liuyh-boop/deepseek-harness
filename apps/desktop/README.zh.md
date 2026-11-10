@@ -65,7 +65,7 @@ Desktop Host 的 Platform API 请求与更新策略请求用相同的 Platform �
 
 ## 原生功能插件
 
-悬浮球、划词工具栏、截图和录屏分别为独立 Cordis bundle：`dsh-floating-ball`、`dsh-selection-toolbar`、`dsh-capture`。其 0.2.0 安装包通过单独安装的 [dsh-desktop-runtime](https://github.com/1997liuyh-boop/dsh-desktop-runtime) 0.1.0 在官方 Desktop 中运行。先安装并启用运行时，再通过 Desktop 插件管理器添加所需功能。运行时通过官方 Host 服务启动独立 Electron 辅助进程，不修改应用，也不要求定制 Desktop 扩展 API。[迁移指南](../../docs/upgrade-guide/v0.2.2-rc.1/desktop-native-plugins/guide.zh.md)提供安装顺序和完整发布标签。
+悬浮球、划词工具栏、截图和录屏分别为独立 Cordis bundle：`dsh-floating-ball`、`dsh-selection-toolbar`、`dsh-capture`。其 0.2.1 安装包通过单独安装的 [dsh-desktop-runtime](https://github.com/1997liuyh-boop/dsh-desktop-runtime) 0.1.1 在官方 Desktop 中运行。先安装并启用运行时，再通过 Desktop 插件管理器添加所需功能。运行时通过官方 Host 服务启动独立 Electron 辅助进程，不修改应用，也不要求定制 Desktop 扩展 API。[迁移指南](../../docs/upgrade-guide/v0.2.2-rc.1/desktop-native-plugins/guide.zh.md)提供安装顺序和完整发布标签。
 
 共享运行时加载各个功能包的 Electron 入口与声明资源，启用和停用均等待确认。停用或卸载功能会释放窗口、接口及原生监听，并保留已有会话、设置、笔记和录屏。停用运行时会停止所有依赖的原生功能。Host 下次启动时重新加载已启用的包。辅助进程托盘提供独立截图和录屏入口，无需悬浮球。划词翻译无需另外两个配套插件；需要其他插件的动作在对应插件缺席时明确提示。
 

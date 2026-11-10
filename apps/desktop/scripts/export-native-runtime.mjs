@@ -9,7 +9,7 @@ export async function exportNativeRuntime({ destination, repository, desktop, bu
   await mkdir(root, { recursive: true })
   const peers = ['cordis', 'schemastery', 'dsh-app-boot', 'dsh-client-connection', 'dsh-api-gateway', 'dsh-permission-presets', 'dsh-session', 'dsh-host-webserver'].map(name => '@deepseek-ai/' + name)
   const pkg = {
-    name: 'dsh-desktop-runtime', version: '0.1.0', type: 'module', license: 'MIT',
+    name: 'dsh-desktop-runtime', version: '0.1.1', type: 'module', license: 'MIT',
     description: 'Independent native plugin runtime for the official DSH desktop application',
     main: './dist/index.js', exports: { '.': './dist/index.js', './package.json': './package.json' },
     engines: { node: '>=24.9.0', dsh: '>=0.2.2-rc.1 <0.3.0-0' },
@@ -53,7 +53,7 @@ Runs separately installed floating ball, selection toolbar and capture plugins i
 
 ## Install and update
 
-Install this repository in DSH's plugin manager and enable it before installing its native feature plugins. Allow Electron's installation script if the package manager requests build approval. Electron is a separate runtime dependency; its first installation downloads the platform binary. Config \`electronExecutable\` can instead select a locally installed compatible Electron 44 executable.
+Install the **dsh-desktop-runtime** repository in DSH's plugin manager and enable it before installing the native feature plugins. Allow Electron's installation script if the package manager requests build approval. Electron is a separate runtime dependency; its first installation downloads the platform binary. Config \`electronExecutable\` can instead select a locally installed compatible Electron 44 executable.
 
 Git commits do not refresh installed packages. To upgrade, use Add plugin with the new release tag or archive, then restart the Host if requested. Existing profile data remains in the same directory.
 
@@ -79,7 +79,7 @@ Run \`npm install\` and \`npm run build\` with Node 24.9 or newer. Source is inc
 
 ## 安装与升级
 
-先在 DSH 插件管理中安装并启用本仓库，再安装各个原生功能插件。包管理器提示构建授权时，需要允许 Electron 安装脚本；首次安装会下载对应系统的独立 Electron 运行时。也可通过配置 \`electronExecutable\` 指定本机兼容的 Electron 44 可执行文件。
+在 DSH 插件管理中搜索并安装 **dsh-desktop-runtime**，启用后再安装各个原生功能插件。包管理器提示构建授权时，需要允许 Electron 安装脚本；首次安装会下载对应系统的独立 Electron 运行时。也可通过配置 \`electronExecutable\` 指定本机兼容的 Electron 44 可执行文件。
 
 提交 Git 代码不会刷新已安装副本。升级时通过“添加插件”安装新的发布标签或归档，按提示重启 Host。现有数据保留在原 profile 目录。
 
