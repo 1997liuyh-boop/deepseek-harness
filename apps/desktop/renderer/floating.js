@@ -1,4 +1,5 @@
 const api = window.dshDesktop
+const standaloneRuntime = api.runtime === 'standalone'
 let gifSrc = 'deepseek-avatar-square.gif'
 const COLLAPSE_MS = 180
 const ANIMATION_MS = 300
@@ -113,18 +114,24 @@ async function* readNdjson(response) {
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let pending = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    pending += decoder.decode(value, { stream: !done })
-    let newline
-    while ((newline = pending.indexOf('\n')) !== -1) {
-      const line = pending.slice(0, newline)
-      pending = pending.slice(newline + 1)
-      if (line !== '') yield JSON.parse(line)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      pending += decoder.decode(value, { stream: !done })
+      if (pending.length > 8_000_000) throw new Error('desktop stream frame is too large')
+      let newline
+      while ((newline = pending.indexOf('\n')) !== -1) {
+        const line = pending.slice(0, newline)
+        pending = pending.slice(newline + 1)
+        if (line !== '') yield JSON.parse(line)
+      }
+      if (done) break
     }
-    if (done) break
+    if (pending !== '') yield JSON.parse(pending)
+  } finally {
+    await reader.cancel()
+    reader.releaseLock?.()
   }
-  if (pending !== '') yield JSON.parse(pending)
 }
 
 function delay(ms, signal) {
@@ -291,7 +298,7 @@ async function main() {
   questionCustom.placeholder = messages.floatingQuestionCustomPlaceholder
   let sessionId = await api.floating.sessionId()
   let standaloneSessionId = sessionId
-  let followedSession = await api.floating.followedSession?.() ?? null
+  let followedSession = standaloneRuntime ? null : await api.floating.followedSession?.() ?? null
   let sharedCatalog = null
   let sharedCurrentBlank = false
   sessionId = followedSession ?? standaloneSessionId
@@ -335,6 +342,8 @@ async function main() {
   let eventsBackoff = 500
   let hostReady = false
   let hostGeneration = 0
+  let transcriptAbort
+  let transcriptSession
 
   if (sessionId !== undefined) orbSessionIds.add(sessionId)
 
@@ -602,7 +611,114 @@ async function main() {
     return workspaceId
   }
 
+  // 官方桌面使用公开会话流，独立渲染正文，不依赖定制主窗口的 iframe。
+  function followStandaloneTranscript() {
+    if (!standaloneRuntime || !hostReady) return
+    const id = sessionId
+    if (transcriptSession === id && transcriptAbort !== undefined) return
+    transcriptAbort?.abort()
+    transcriptAbort = undefined
+    transcriptSession = id
+    transcript.replaceChildren()
+    if (id === undefined) return
+    const abort = new AbortController()
+    transcriptAbort = abort
+    const current = () => !abort.signal.aborted && sessionId === id && !pageClosed()
+    void (async () => {
+      let backoff = 500
+      while (current()) {
+        try {
+          const response = await fetch(REMOTE_STREAM_URL, {
+            method: 'POST', headers: { 'content-type': 'application/json' }, signal: abort.signal,
+            body: JSON.stringify({ endpoint: 'session/follow', payload: { args: { request: {
+              address: { kind: 'session', sessionId: id }, assistantStream: true,
+            } } } }),
+          })
+          const rows = new Map()
+          let live
+          let revision = 0
+          const textOf = content => Array.isArray(content)
+            ? content.filter(block => block?.type === 'text').map(block => block.text).join('\n') : ''
+          const show = (role, text, node) => {
+            const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 40
+            const article = node ?? document.createElement('article')
+            article.className = `floating-message floating-message-${role}`
+            if (role === 'assistant') {
+              article.innerHTML = window.DshMarkdown.renderMarkdown(text)
+              for (const link of article.querySelectorAll('a')) { link.target = '_blank'; link.rel = 'noopener noreferrer' }
+            } else article.textContent = text
+            if (!node) transcript.append(article)
+            if (bottom) transcript.scrollTop = transcript.scrollHeight
+            return article
+          }
+          const showLive = () => {
+            if (live?.text) live.node = show('assistant', live.text, live.node)
+          }
+          const acceptEvent = event => {
+            if (!event) return
+            const replacement = event.surfaceOp
+            if (replacement?.op === 'replace') {
+              for (const [seq, node] of rows) if (seq >= replacement.startSeq && seq <= replacement.endSeq) {
+                node.remove(); rows.delete(seq)
+              }
+            }
+            if (event.type === 'turn/start') setRunning(true)
+            if (event.type === 'turn/end') setRunning(false)
+            if (!['user/message', 'assistant/message'].includes(event.type)) return
+            const assistant = event.type === 'assistant/message'
+            if (!assistant && event.data?.source?.kind === 'plugin') return
+            const text = textOf(assistant ? event.data?.message?.content : event.data?.content)
+            if (assistant) { live?.node?.remove(); live = undefined }
+            if (text !== '') rows.set(event.seq, show(assistant ? 'assistant' : 'user', text, rows.get(event.seq)))
+          }
+          for await (const frame of readNdjson(response)) {
+            if (!current()) return
+            if (frame.type === 'snapshot') {
+              transcript.replaceChildren(); rows.clear(); live = undefined
+              for (const record of frame.records ?? []) if (record.type === 'event') acceptEvent(record.event)
+              revision = frame.assistantStream?.revision ?? 0
+              const attempt = frame.assistantStream?.activeAttempt
+              if (attempt) {
+                live = { attemptId: attempt.attemptId, nextIndex: attempt.nextIndex, text: (attempt.stream ?? []).map(record =>
+                  record.type === 'text-chunks' ? record.texts.join('')
+                    : record.type === 'chunk' && record.chunk?.type === 'text-delta' ? record.chunk.text : '').join('') }
+                showLive()
+              }
+              backoff = 500
+              status.textContent = ''
+            } else if (frame.type === 'event') acceptEvent(frame.event)
+            else if (frame.type === 'assistant-stream') {
+              const value = frame.frame
+              if (value.revision <= revision) continue
+              if (value.revision !== revision + 1) throw new Error('assistant stream revision gap')
+              revision = value.revision
+              if (value.type === 'start') {
+                live?.node?.remove()
+                live = { attemptId: value.attemptId, nextIndex: 0, text: '' }
+                setRunning(true)
+              } else if (value.type === 'chunk') {
+                if (!live || live.attemptId !== value.attemptId || live.nextIndex !== value.index) throw new Error('assistant stream chunk gap')
+                live.nextIndex += 1
+                if (value.chunk?.type === 'text-delta') { live.text += value.chunk.text; showLive() }
+              } else if (value.type === 'end' && value.outcome?.kind === 'abandoned') {
+                live?.node?.remove(); live = undefined
+              }
+            }
+          }
+        } catch (error) {
+          if (!current()) return
+          console.warn('悬浮球会话流已断开', error)
+        }
+        if (!current()) return
+        status.textContent = messages.floatingDisconnected
+        try { await delay(backoff, abort.signal) } catch (error) { if (abort.signal.aborted) return; throw error }
+        backoff = Math.min(backoff * 2, 8000)
+      }
+    })()
+  }
+
   function postOverlaySession() {
+    if (standaloneRuntime) { followStandaloneTranscript(); return }
     const frame = transcript.querySelector('iframe')
     if (frame === null || sessionId === undefined) return
     const target = frame.contentWindow
@@ -617,6 +733,7 @@ async function main() {
   }
 
   function ensureTranscriptFrame() {
+    if (standaloneRuntime) { followStandaloneTranscript(); return }
     if (!hostReady) return
     const generation = String(hostGeneration)
     const existing = transcript.querySelector('iframe')
@@ -641,6 +758,7 @@ async function main() {
     sessionId = id
     orbSessionIds.add(id)
     await api.floating.setSessionId(id)
+    if (standaloneRuntime) await persistOverlayPermission(id)
     await selectOverlayModel(id)
     postOverlaySession()
     syncQuestion()
@@ -651,7 +769,7 @@ async function main() {
     await rpc('session/create', {
       request: {
         sessionId: id,
-        agentPreset: 'computer-use',
+        ...(standaloneRuntime ? {} : { agentPreset: 'computer-use' }),
         workspaceId: await ensureWorkspace(),
       },
     })
@@ -659,11 +777,11 @@ async function main() {
   }
 
   async function createOrbSession() {
-    if (sharedCatalog !== null || api.floating.navigateSession) return requestMainSession('new')
+    if (!standaloneRuntime && (sharedCatalog !== null || api.floating.navigateSession)) return requestMainSession('new')
     await leaveProjectSession()
     const id = (await rpc('session/create', {
       request: {
-        agentPreset: 'computer-use',
+        ...(standaloneRuntime ? {} : { agentPreset: 'computer-use' }),
         workspaceId: await ensureWorkspace(),
       },
     })).sessionId
@@ -671,6 +789,7 @@ async function main() {
   }
 
   function followProjectSession(id) {
+    if (standaloneRuntime) return
     if (sharedCatalog !== null) return
     const previous = followedSession
     followedSession = typeof id === 'string' ? id : null
@@ -703,6 +822,7 @@ async function main() {
   }
 
   function applySharedCatalog(catalog) {
+    if (standaloneRuntime) return
     if (!catalog) return
     if (!Array.isArray(catalog.items) || !catalog.items.every(item => typeof item.sessionId === 'string' && typeof item.title === 'string')) return
     if (catalog.reset === true) {
@@ -728,8 +848,8 @@ async function main() {
     if (historyOpen) void renderHistory(sharedCatalog)
   }
 
-  api.floating.onSessionCatalog?.(applySharedCatalog)
-  if (api.floating.sessionCatalog) {
+  if (!standaloneRuntime) api.floating.onSessionCatalog?.(applySharedCatalog)
+  if (!standaloneRuntime && api.floating.sessionCatalog) {
     const catalog = await api.floating.sessionCatalog()
     applySharedCatalog(catalog)
     if (!catalog) void api.floating.navigateSession({ type: 'dsh.overlay.navigate', action: 'request' })
@@ -742,7 +862,7 @@ async function main() {
   }
 
   async function ensureSession() {
-    if (api.floating.sessionCatalog && sharedCatalog === null) {
+    if (!standaloneRuntime && api.floating.sessionCatalog && sharedCatalog === null) {
       const catalog = await api.floating.sessionCatalog()
       if (!catalog) throw new Error(messages.floatingDisconnected)
       applySharedCatalog(catalog)
@@ -961,7 +1081,11 @@ async function main() {
   }
 
   async function renderHistory(items) {
-    const rows = sharedCatalog ?? orbComputerUseItems(items, await orbCwd())
+    const cwd = sharedCatalog === null ? await orbCwd() : undefined
+    if (pageClosed()) return
+    const rows = sharedCatalog ?? (standaloneRuntime
+      ? (items ?? []).filter(item => item.origin !== 'subagent' && item.cwd === cwd)
+      : orbComputerUseItems(items, cwd))
     historyList.replaceChildren()
     if (rows.length === 0) {
       const empty = document.createElement('p')
@@ -1241,7 +1365,9 @@ async function main() {
     status.textContent = ''
     if (expanded) ensureTranscriptFrame()
     // 不支持跨窗口频道的旧环境继续使用独立会话。
-    if (!api.floating.sessionCatalog && typeof BroadcastChannel === 'undefined') void ensureSession().then(() => refreshOverlay())
+    if (standaloneRuntime || (!api.floating.sessionCatalog && typeof BroadcastChannel === 'undefined')) {
+      void ensureSession().then(() => refreshOverlay()).catch(() => { status.textContent = messages.floatingDisconnected })
+    }
     else void refreshOverlay()
     startRemoteEvents()
   }
@@ -1252,12 +1378,14 @@ async function main() {
     else {
       hostReady = false
       stopRemoteEvents()
+      transcriptAbort?.abort()
+      transcriptAbort = undefined
     }
   })
   const backend = await api.backend.status()
   if (backend.phase === 'ready') connectWhenReady()
   else status.textContent = messages.floatingDisconnected
-  window.addEventListener('unload', stopRemoteEvents)
+  window.addEventListener('unload', () => { stopRemoteEvents(); transcriptAbort?.abort() })
 
   document.body.addEventListener('pointerenter', () => {
     dockPointerInside = true

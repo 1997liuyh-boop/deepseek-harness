@@ -101,11 +101,15 @@ const backend = {
   },
 }
 
+declare const DSH_NATIVE_STANDALONE: boolean
+const standalone = typeof DSH_NATIVE_STANDALONE !== 'undefined' && DSH_NATIVE_STANDALONE
+const { navigateSession: _navigateSession, ...standaloneFloating } = floating
 contextBridge.exposeInMainWorld('dshDesktop', {
+  runtime: standalone ? 'standalone' : 'desktop',
   protocolVersion: 1,
   capture: { result: (operation: string, input?: object) => ipcRenderer.invoke(DESKTOP_IPC.captureResult, operation, input) },
   locale: () => ipcRenderer.invoke(DESKTOP_IPC.floatingLocale),
   backend,
-  floating,
+  floating: standalone ? standaloneFloating : floating,
   selection,
 })

@@ -16,3 +16,21 @@
 #studio-mentions[hidden] { @apply hidden; }
 .studio-mention-option { @apply block w-full cursor-pointer rounded-xl px-3 py-2 text-left; }
 .studio-mention-option[aria-selected="true"], .studio-mention-option:hover { background: var(--input-bg); }
+
+.floating-message { @apply min-w-0 shrink-0 select-text text-sm leading-6 [overflow-wrap:anywhere]; }
+.floating-message-user { @apply self-end rounded-xl px-3 py-2 whitespace-pre-wrap; background: var(--input-bg); }
+.floating-message-assistant { @apply w-full whitespace-normal; }
+.floating-message :where(p, ul, ol, blockquote, pre, table) { @apply my-3; }
+.floating-message :where(h1, h2, h3, h4, h5, h6) { @apply mt-4 mb-2 text-base font-medium leading-snug; }
+.floating-message strong, .floating-message th { @apply font-medium; }
+.floating-message ul { @apply list-disc pl-5; }
+.floating-message ol { @apply list-decimal pl-5; }
+.floating-message blockquote { @apply ml-0 border-l-2 border-solid pl-3; border-color: var(--border); }
+.floating-message a { @apply underline underline-offset-2; }
+.floating-message pre { @apply max-w-full overflow-x-auto rounded-lg p-3 text-xs leading-5; background: var(--input-bg); }
+.floating-message code { @apply rounded px-1 py-0.5 font-mono text-xs; background: var(--input-bg); }
+.floating-message pre code { @apply bg-transparent p-0; }
+.floating-message table { @apply block max-w-full overflow-x-auto border-collapse text-left text-xs; }
+.floating-message :where(th, td) { @apply border border-solid px-3 py-2; border-color: var(--border); }
+.floating-message > :first-child { @apply mt-0; }
+.floating-message > :last-child { @apply mb-0; }

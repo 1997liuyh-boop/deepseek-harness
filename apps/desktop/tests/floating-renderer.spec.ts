@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest'
 import { resolveDesktopLocale } from '../src/locale.ts'
 import type { FloatingDockState } from '../src/floating-window.ts'
 import { composeSelectionSendPrompt } from '../src/selection-prompt.ts'
+import { renderMarkdown } from '../src/selection-markdown.ts'
 
 function isRemoteStream(input: string | URL): boolean {
   return String(input).includes('/.dsh/remote-stream')
@@ -168,6 +169,113 @@ function setPromptText(prompt: HTMLElement, text: string) {
   prompt.textContent = text
   prompt.classList.toggle('prompt-empty', text.trim() === '')
 }
+
+it('官方桌面独立悬浮球渲染历史和实时 Markdown，切换会话后停止旧流且保留停止控制', async () => {
+  const dom = new JSDOM(readFileSync(new URL('../renderer/floating.html', import.meta.url), 'utf8'), {
+    runScripts: 'outside-only', url: 'dsh-app://shell/floating.html',
+  })
+  const streams = new Map([['orb-1', createNdjsonPump()], ['orb-2', createNdjsonPump()]])
+  const signals = new Map<string, AbortSignal | null | undefined>()
+  const events = createNdjsonPump()
+  const calls: { method: string; args: Record<string, unknown> }[] = []
+  const sessionCatalog = vi.fn()
+  const navigateSession = vi.fn()
+  const setOverlayPermission = vi.fn()
+  const fetchMock = vi.fn(async (input: string | URL, init?: RequestInit) => {
+    if (typeof init?.body !== 'string') throw new Error('Missing JSON request')
+    const body = JSON.parse(init.body) as {
+      endpoint: string
+      method: string
+      rpcId: string
+      payload: { args: { request?: { sessionId?: string; address?: { sessionId: string }; assistantStream?: boolean } } }
+    }
+    if (isRemoteStream(input)) {
+      if (body.endpoint === '$events') return events.response(init?.signal)
+      const request = body.payload.args.request
+      if (request?.address === undefined) throw new Error('Missing session address')
+      expect(request.assistantStream).toBe(true)
+      signals.set(request.address.sessionId, init?.signal)
+      return streams.get(request.address.sessionId)!.response(init?.signal)
+    }
+    calls.push({ method: body.method, args: body.payload.args })
+    const value = body.method === 'workspace/create' ? { workspace: { workspaceId: 'orb-workspace' } }
+      : body.method === 'session/create' ? { sessionId: body.payload.args.request?.sessionId ?? 'orb-1' }
+        : body.method === 'session/list' ? { items: [
+          { sessionId: 'orb-1', title: '悬浮球一', cwd: '/tmp/dsh_orb', running: false },
+          { sessionId: 'orb-2', title: '悬浮球二', cwd: '/tmp/dsh_orb', running: true },
+          { sessionId: 'other', title: '其他项目', cwd: '/tmp/other', running: false },
+        ] } : {}
+    return rpcResponse(body.rpcId, value)
+  })
+  Object.defineProperties(dom.window, {
+    fetch: { value: fetchMock }, crypto: { value: globalThis.crypto }, TextDecoder: { value: globalThis.TextDecoder },
+    DshMarkdown: { value: { renderMarkdown } },
+    dshDesktop: { value: {
+      runtime: 'standalone', locale: async () => resolveDesktopLocale('zh-CN'),
+      backend: { status: async () => ({ phase: 'ready' }), subscribe: vi.fn() },
+      floating: {
+        sessionId: async () => 'orb-1', setSessionId: vi.fn(),
+        followedSession: async () => 'unrelated-main-session', sessionCatalog, navigateSession,
+        move: vi.fn(), clamp: vi.fn(), setExpanded: async (expanded: boolean) => ({ expanded, horizontal: 'left', vertical: 'up' }),
+        orbWorkspacePath: async () => '/tmp/dsh_orb', setSessionRunning: vi.fn(),
+        overlayModel: async () => ({ provider: 'provider', model: 'model' }),
+        overlayPermission: async () => 'workspace-write', setOverlayPermission,
+        onOverlayModel: vi.fn(), onSelectionPrompt: vi.fn(), onSelectionAttach: vi.fn(), onCreateSession: vi.fn(),
+      },
+    } },
+  })
+  try {
+    runInContext(readFileSync(new URL('../renderer/floating.js', import.meta.url), 'utf8'), dom.getInternalVMContext())
+    await expect.poll(() => signals.has('orb-1')).toBe(true)
+    expect(sessionCatalog).not.toHaveBeenCalled()
+    expect(navigateSession).not.toHaveBeenCalled()
+    expect(setOverlayPermission).toHaveBeenCalledWith('workspace-write', 'orb-1')
+    expect(calls.find(call => call.method === 'session/create')?.args).toEqual({
+      request: { sessionId: 'orb-1', workspaceId: 'orb-workspace' },
+    })
+    const first = streams.get('orb-1')!
+    first.push({ type: 'snapshot', records: [
+      { type: 'event', event: { type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: '**用户原文**' }] } } },
+      { type: 'event', event: { type: 'assistant/message', seq: 2, data: { message: { content: [{ type: 'text', text: '## 回复\n\n**粗体**\n\n```js\nconst x = 1\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n<img src=x onerror=alert(1)>' }] } } } },
+    ], assistantStream: { revision: 1, activeAttempt: { attemptId: 'live', nextIndex: 1, stream: [
+      { type: 'text-chunks', texts: ['实时'] }, { type: 'reasoning-chunks', texts: ['隐藏推理'] },
+    ] } } })
+    const doc = dom.window.document
+    const transcript = doc.querySelector('#transcript')!
+    await expect.poll(() => transcript.querySelector('h2')?.textContent).toBe('回复')
+    expect(transcript.querySelector('.floating-message-user')?.textContent).toBe('**用户原文**')
+    expect(transcript.querySelector('.floating-message-user strong')).toBeNull()
+    expect(transcript.querySelector('strong')?.textContent).toBe('粗体')
+    expect(transcript.querySelector('pre code')?.textContent).toContain('const x = 1')
+    expect(transcript.querySelectorAll('table td')).toHaveLength(2)
+    expect(transcript.querySelector('iframe, img, script')).toBeNull()
+    expect(transcript.textContent).not.toContain('隐藏推理')
+    first.push({ type: 'assistant-stream', frame: { type: 'chunk', revision: 2, attemptId: 'live', index: 1, chunk: { type: 'text-delta', text: '**输出**' } } })
+    await expect.poll(() => transcript.querySelector('.floating-message-assistant:last-child strong')?.textContent).toBe('输出')
+    const final = { type: 'event', event: { type: 'assistant/message', seq: 3, data: { message: { content: [{ type: 'text', text: '**最终答复**' }] } } } }
+    first.push(final)
+    first.push(final)
+    await expect.poll(() => transcript.querySelectorAll('.floating-message-assistant').length).toBe(2)
+    expect(transcript.textContent).not.toContain('实时')
+    doc.querySelector<HTMLButtonElement>('#history')!.click()
+    await expect.poll(() => doc.querySelectorAll('.history-row').length).toBe(2)
+    const second = [...doc.querySelectorAll<HTMLButtonElement>('.history-row')].find(node => node.textContent === '悬浮球二')!
+    second.click()
+    await expect.poll(() => signals.has('orb-2')).toBe(true)
+    expect(signals.get('orb-1')?.aborted).toBe(true)
+    first.push({ type: 'event', event: { type: 'assistant/message', seq: 4, data: { message: { content: [{ type: 'text', text: '旧会话迟到的消息' }] } } } })
+    streams.get('orb-2')!.push({ type: 'snapshot', records: [
+      { type: 'event', event: { type: 'assistant/message', seq: 1, data: { message: { content: [{ type: 'text', text: '第二个会话' }] } } } },
+    ], assistantStream: { revision: 0 } })
+    await expect.poll(() => transcript.textContent).toBe('第二个会话')
+    doc.querySelector<HTMLButtonElement>('#stop')!.click()
+    await expect.poll(() => calls.find(call => call.method === 'session/cancel')?.args).toEqual({ request: { sessionId: 'orb-2' } })
+    expect(transcript.querySelector('iframe')).toBeNull()
+  } finally {
+    dom.window.dispatchEvent(new dom.window.Event('unload'))
+    dom.window.close()
+  }
+})
 
 it('creates a Computer Use session on dsh_orb and sends from the overlay', async () => {
   const dom = new JSDOM(readFileSync(new URL('../renderer/floating.html', import.meta.url), 'utf8'), {

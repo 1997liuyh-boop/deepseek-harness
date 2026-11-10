@@ -86,6 +86,7 @@ export async function activate(context: DesktopFeatureContext): Promise<void> {
   })
 
   function pushStoredOrbPreferences(host: Pick<DesktopHostProcess, 'sendOrb' | 'sendOrbCodeAgentModel'>): void {
+    if (environment.standalone) return
     host.sendOrbCodeAgentModel(readOrbAgentModels(paths.profile).background)
     host.sendOrb({ type: 'orb-permission', preset: readOrbPermission(paths.profile) })
     host.sendOrb({
@@ -193,11 +194,12 @@ export async function activate(context: DesktopFeatureContext): Promise<void> {
   }
 
   const floatingShell = context.own(createFloatingWindow(shellPreload, messages, () => {
-    if (mainWindow !== undefined && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() }
+    context.showMain()
   }, () => { app.quit() }, {
     enabled: () => context.service('selection')?.enabled() ?? false,
     toggle: () => { context.service('selection')?.toggle() },
   }, {
+    backgroundSupported: !environment.standalone,
     loadCatalog: loadFloatingModelCatalog,
     overlay: () => readOrbAgentModels(paths.profile).overlay,
     background: () => readOrbAgentModels(paths.profile).background,
@@ -205,7 +207,7 @@ export async function activate(context: DesktopFeatureContext): Promise<void> {
     onSelectBackground: persistBackgroundModel,
     selection: () => context.service('selection')?.model(),
     onSelectSelection: (selection) => { context.service('selection')?.setModel(selection) },
-  }, {
+  }, environment.standalone ? undefined : {
     enabled: () => readMillifractionCoordinates(paths.profile).enabled,
     toggle: () => {
       const current = readMillifractionCoordinates(paths.profile).enabled
@@ -340,18 +342,24 @@ export async function activate(context: DesktopFeatureContext): Promise<void> {
   })
   context.handle(DESKTOP_IPC.floatingFocusMain, (event) => {
     shellSender(event)
-    if (mainWindow !== undefined && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus() }
+    context.showMain()
   })
   context.handle(DESKTOP_IPC.floatingQuit, (event) => {
     shellSender(event)
     app.quit()
   })
-  context.handle(DESKTOP_IPC.floatingOverlayPermissionSet, (event, preset: unknown, sessionId: unknown) => {
+  context.handle(DESKTOP_IPC.floatingOverlayPermissionSet, async (event, preset: unknown, sessionId: unknown) => {
     shellSender(event)
     if (!isOrbPermissionPreset(preset)) throw new Error('dsh desktop: overlay permission must be a known Access preset')
-    writeOrbPermission(paths.profile, preset)
     const id = typeof sessionId === 'string' && sessionId !== '' ? sessionId : undefined
-    environment.host()?.sendOrb({ type: 'orb-permission', preset, ...(id === undefined ? {} : { sessionId: id }) })
+    if (environment.standalone && id !== undefined) {
+      const response = await context.request('/.dsh/native-command', JSON.stringify({ command: 'permission', payload: { preset, sessionId: id } }))
+      if (!response.ok) throw new Error(`Permission update HTTP ${response.status}`)
+      await response.arrayBuffer()
+    } else if (!environment.standalone) {
+      environment.host()?.sendOrb({ type: 'orb-permission', preset, ...(id === undefined ? {} : { sessionId: id }) })
+    }
+    writeOrbPermission(paths.profile, preset)
   })
   context.handle(DESKTOP_IPC.floatingRunning, (event, running: unknown) => {
     shellSender(event)

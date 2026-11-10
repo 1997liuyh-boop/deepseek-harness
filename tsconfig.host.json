@@ -5,6 +5,7 @@
     "rewriteRelativeImportExtensions": false
   },
   "include": [
+    "apps/desktop/native-extension-runtime/**/*.ts",
     "apps/web/tests/home-whale.e2e.ts",
     "apps/web/tests/sidebar-drawer.e2e.ts",
     "apps/web/tests/creation-recommendations.e2e.ts",

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/upgrade-guide/v0.2.2-rc.1/desktop-native-plugins/guide.md
 /:
-  en: 89122f42b0ce0da5
-  zh: 2ae09fd4fe8965e9
+  en: e4a45bc0358ac2a1
+  zh: 9145bd1489779e0c
 /desktop-native-feature-plugins:
   en: 6da6cd04cc81d684
   zh: 652bade2bc56cf0f
 /desktop-native-feature-plugins/change:
-  en: 788b3f685830ae09
-  zh: e3508ebfdaad4e8a
+  en: 80ddb3671abebbb4
+  zh: bf3c79451745a354
 /desktop-native-feature-plugins/migration:
-  en: 74b479f1ba5027d0
-  zh: 0f881ad2a1fc63bf
+  en: 89e02c788efc67a2
+  zh: 906e484fa184849b

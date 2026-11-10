@@ -1,6 +1,6 @@
 /** 桌面扩展的原生资源、IPC 与跨扩展服务随各自作用域释放。 */
 import { randomUUID } from 'node:crypto'
-import { BrowserWindow, ipcMain, net, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron'
+import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron'
 import { DESKTOP_IPC, assertDesktopSender } from './ipc.ts'
 import type { DesktopBackendState } from './backend-controller.ts'
 import type { DesktopHostProcess, DesktopOrbHostHandlers } from './host-process.ts'
@@ -20,6 +20,10 @@ export interface DesktopFeatureEnvironment {
   readonly workspace: string
   readonly preload: string
   readonly hostHandlers: DesktopOrbHostHandlers
+  /** 独立辅助进程通过所属插件的 Host 通道访问官方接口。 */
+  readonly transport?: { request(path: string, body: string, signal?: AbortSignal): Promise<Response> }
+  readonly standalone?: boolean
+  openMain?(): void
   mainWindow(): BrowserWindow | undefined
   locale(): ReturnType<typeof resolveDesktopLocale>
   backendState(): DesktopBackendState
@@ -111,16 +115,18 @@ export class DesktopFeatureContext {
   /** @returns 当前主窗口选择的会话；尚未选择时为 undefined。 */
   currentSession(): string | undefined { return this.owner.currentSession() }
   /** 将主窗口置于前台。 */
-  showMain(): void { const window = this.environment.mainWindow(); if (window && !window.isDestroyed()) { window.show(); window.focus() } }
+  showMain(): void {
+    const window = this.environment.mainWindow()
+    if (window && !window.isDestroyed()) { window.show(); window.focus() }
+    else this.environment.openMain?.()
+  }
   /** @returns 宿主当前可用模型目录；未连接或请求未成功时为 undefined。 */
   async modelCatalog(): Promise<FloatingModelCatalog | undefined> {
     const connection = this.environment.connection()
-    if (!connection) return undefined
+    if (!connection && !this.environment.transport) return undefined
     const rpcId = randomUUID()
-    const response = await net.fetch(new URL('/api/session/modelCatalog', connection.url).href, {
-      method: 'POST', headers: { 'content-type': 'application/json', cookie: connection.cookie },
-      body: JSON.stringify({ type: 'client-request', rpcId, method: 'session/modelCatalog', payload: { args: {} } }),
-    })
+    const body = JSON.stringify({ type: 'client-request', rpcId, method: 'session/modelCatalog', payload: { args: {} } })
+    const response = await this.request('/api/session/modelCatalog', body)
     if (!response.ok) return undefined
     const input: unknown = await response.json()
     if (typeof input !== 'object' || input === null) return undefined
@@ -132,6 +138,7 @@ export class DesktopFeatureContext {
   }
   /** @param path 宿主 RPC 路径。 @param body 已编码请求。 @param signal 可选取消信号。 @returns 已认证的宿主响应。 */
   request(path: string, body: string, signal?: AbortSignal): Promise<Response> {
+    if (this.environment.transport) return this.environment.transport.request(path, body, signal)
     const connection = this.environment.connection()
     if (!connection) return Promise.reject(new Error(this.environment.locale().messages.floatingDisconnected))
     return fetch(new URL(path, connection.url), { method: 'POST', headers: { 'content-type': 'application/json', cookie: connection.cookie }, body,

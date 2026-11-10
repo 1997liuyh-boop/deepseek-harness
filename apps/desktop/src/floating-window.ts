@@ -25,6 +25,7 @@ export interface FloatingContextEditState {
 
 
 export interface FloatingAgentMenuState {
+  readonly backgroundSupported?: boolean
   readonly catalog: FloatingModelCatalog | undefined
   readonly overlay: OrbAgentModelSelection
   readonly background: OrbAgentModelSelection
@@ -37,6 +38,7 @@ export interface FloatingAgentMenuState {
 
 
 export interface FloatingAgentMenuSource {
+  readonly backgroundSupported?: boolean
   readonly loadCatalog: () => Promise<FloatingModelCatalog | undefined>
   readonly overlay: () => OrbAgentModelSelection
   readonly background: () => OrbAgentModelSelection
@@ -95,7 +97,7 @@ export function floatingContextMenuTemplate(
           labels,
         ),
       },
-      {
+      ...(agents.backgroundSupported === false ? [] : [{
         label: messages.floatingBackgroundAgentSettings,
         submenu: floatingAgentModelItems(
           agents.catalog,
@@ -103,7 +105,7 @@ export function floatingContextMenuTemplate(
           agents.onSelectBackground,
           labels,
         ),
-      },
+      }]),
       {
         label: messages.floatingSelectionModelSettings,
         submenu: floatingSelectionModelItems(
@@ -728,6 +730,7 @@ async function popupFloatingContextMenu(
       background: agents.background(),
       onSelectOverlay: agents.onSelectOverlay,
       onSelectBackground: agents.onSelectBackground,
+      ...(agents.backgroundSupported === undefined ? {} : { backgroundSupported: agents.backgroundSupported }),
       selection: agents.selection(),
       onSelectSelection: agents.onSelectSelection,
     },
