@@ -7,15 +7,15 @@ import { SelectionSessionTask, type SelectionTaskState } from '../src/selection-
 const directories: string[] = []
 afterEach(async () => { await Promise.all(directories.splice(0).map(path => rm(path, { recursive: true, force: true }))) })
 
-async function translationWorkspace() {
-  const directory = await mkdtemp(join(tmpdir(), 'dsh-translation-'))
+async function toolbarWorkspace() {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-toolbar-'))
   directories.push(directory)
-  return { path: join(directory, 'translation-team'), title: '翻译小分队' }
+  return { path: join(directory, 'toolbar-group'), title: '工具栏分组' }
 }
 
 function transport(frames: object[], options: { workspaceTitle?: string; failMethod?: string } = {}) {
   const calls: { method: string; args: Record<string, object> }[] = []
-  let workspaceTitle = options.workspaceTitle ?? 'translation-team'
+  let workspaceTitle = options.workspaceTitle ?? 'toolbar-group'
   let registered = options.workspaceTitle !== undefined
   return {
     calls,
@@ -105,8 +105,8 @@ it('流提前断开时保留已有译文并只取消所属辅助会话', async (
   expect(port.calls.filter(call => call.method === 'session/cancel').map(call => call.args)).toEqual([{ request: { sessionId: 'auxiliary' } }])
 })
 
-it('划词翻译先创建翻译小分队，再在该分组内创建会话，重试复用同一分组', async () => {
-  const workspace = await translationWorkspace()
+it('划词工具先创建工具栏分组，再在该分组内创建会话，重试复用同一分组', async () => {
+  const workspace = await toolbarWorkspace()
   const port = transport([
     { type: 'event', event: { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'Hello' }] } } } },
     { type: 'event', event: { type: 'turn/end', data: { reason: { kind: 'completed' } } } },
@@ -120,7 +120,7 @@ it('划词翻译先创建翻译小分队，再在该分组内创建会话，重�
     {
       "group": {
         "request": {
-          "title": "翻译小分队",
+          "title": "工具栏分组",
           "workspaceId": "translation-workspace",
         },
       },
@@ -137,16 +137,16 @@ it('划词翻译先创建翻译小分队，再在该分组内创建会话，重�
     .toEqual([{ request: { workspaceId: 'translation-workspace' } }, { request: { workspaceId: 'translation-workspace' } }])
 })
 
-it.each(['翻译收藏', 'translation-team'])('复用已有分组 %s，保留自定义名称并补全中断的初始命名', async (workspaceTitle) => {
-  const workspace = await translationWorkspace()
+it.each(['工具栏收藏', 'toolbar-group'])('复用已有分组 %s，保留自定义名称并补全中断的初始命名', async (workspaceTitle) => {
+  const workspace = await toolbarWorkspace()
   const port = transport([], { workspaceTitle })
   await new SelectionSessionTask(port, () => undefined).run('原文', '划词翻译', undefined, workspace)
-  expect(port.calls.filter(call => call.method === 'workspace/rename')).toHaveLength(workspaceTitle === 'translation-team' ? 1 : 0)
+  expect(port.calls.filter(call => call.method === 'workspace/rename')).toHaveLength(workspaceTitle === 'toolbar-group' ? 1 : 0)
   expect(port.calls.find(call => call.method === 'session/create')?.args).toEqual({ request: { workspaceId: 'translation-workspace' } })
 })
 
 it.each(['workspace/create', 'workspace/rename'])('分组准备失败 %s 时显示错误，不创建未分组会话', async (failMethod) => {
-  const workspace = await translationWorkspace()
+  const workspace = await toolbarWorkspace()
   const port = transport([], { failMethod })
   const states: SelectionTaskState[] = []
   await new SelectionSessionTask(port, state => states.push(state)).run('原文', '划词翻译', undefined, workspace)
@@ -155,7 +155,7 @@ it.each(['workspace/create', 'workspace/rename'])('分组准备失败 %s 时显�
 })
 
 it('等待分组时取消，不再重命名分组、创建会话或发布迟到状态', async () => {
-  const workspace = await translationWorkspace()
+  const workspace = await toolbarWorkspace()
   const port = transport([])
   let respond: (() => void) | undefined
   let started: (() => void) | undefined

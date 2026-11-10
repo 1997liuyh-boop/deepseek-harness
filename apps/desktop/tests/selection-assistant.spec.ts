@@ -187,7 +187,7 @@ it('重试先停止旧任务，已过期任务不能覆盖新结果，关闭后�
   const second = native.tasks[1] as { stop: Mock<() => Promise<void>>; run: ReturnType<typeof vi.fn>; publish(state: object): void }
   expect(second.run.mock.calls[0]?.[2]).toBe('main-session')
   expect(second.run.mock.calls[0]?.[3]).toEqual({
-    path: join(view.host.profileDir, 'selection', 'translation-team'), title: '翻译小分队',
+    path: join(view.host.profileDir, 'selection', 'toolbar-group'), title: '工具栏分组',
   })
   second.publish({ phase: 'streaming', text: '当前结果' })
   expect(view.window.webContents.send).toHaveBeenCalledOnce()
@@ -204,11 +204,13 @@ it('重试先停止旧任务，已过期任务不能覆盖新结果，关闭后�
   expect(disposed).toBe(true)
 })
 
-it('划词解读沿用独立会话，不进入翻译小分队', async () => {
+it('划词解读进入工具栏分组，与翻译共用工作区', async () => {
   const view = setup('explain')
   await view.invoke(view.event, 'run', { language: 'English' })
   const task = native.tasks[0] as { run: ReturnType<typeof vi.fn> }
-  expect(task.run.mock.calls[0]?.slice(1)).toEqual(['划词解读', 'main-session', undefined, undefined])
+  expect(task.run.mock.calls[0]?.slice(1)).toEqual(['划词解读', 'main-session', {
+    path: join(view.host.profileDir, 'selection', 'toolbar-group'), title: '工具栏分组',
+  }, undefined])
   await view.dispose()
 })
 
