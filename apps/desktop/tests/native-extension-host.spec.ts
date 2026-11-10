@@ -50,7 +50,7 @@ function fixture(options: {
   }
   const bridge = createNativeHostBridge(ctx, (message) => {
     messages.push(message)
-    if (message.type === 'dsh-native-end' || message.type === 'dsh-native-error') finished.resolve()
+    if (message.type === 'dsh-native-end' || message.type === 'dsh-native-error') finished.resolve(undefined)
   })
   onTestFinished(() => { bridge.dispose() })
   function request(path: string, body: object | string = {}) {
@@ -112,7 +112,7 @@ it.each(['cancel', 'dispose'])('%s 中止在途官方请求，并丢弃迟到响
   if (operation === 'cancel') port.bridge.handle({ type: 'dsh-native-cancel', id: 'request' })
   else port.bridge.dispose()
   expect(signal.aborted).toBe(true)
-  release.resolve()
+  release.resolve(undefined)
   await new Promise<void>(resolve => setImmediate(resolve))
   expect(port.messages).toEqual([])
 })
@@ -120,11 +120,11 @@ it.each(['cancel', 'dispose'])('%s 中止在途官方请求，并丢弃迟到响
 it('官方 owner 连接关闭后结束原生等待，显示明确断开错误', async () => {
   const started = Promise.withResolvers<undefined>()
   const release = Promise.withResolvers<undefined>()
-  const port = fixture({ rpc: async () => { started.resolve(); await release.promise; return Response.json({ late: true }) } })
+  const port = fixture({ rpc: async () => { started.resolve(undefined); await release.promise; return Response.json({ late: true }) } })
   const done = port.request('/api/session/create')
   await started.promise
   await port.peer.dispose()
-  release.resolve()
+  release.resolve(undefined)
   await done
   const message = port.messages.at(-1)
   expect(message?.type).toBe('dsh-native-error')
