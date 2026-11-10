@@ -13,11 +13,26 @@ const rootManifest = JSON.parse(await readFile(join(repository, 'package.json'),
 const buildDependencies = Object.fromEntries(['tsdown', 'typescript', 'vite', 'postcss', '@tailwindcss/postcss', 'tailwindcss']
   .map(name => [name, manifest.devDependencies[name] ?? rootManifest.devDependencies[name]]))
 const destination = resolve(process.argv[2] ?? join(desktop, 'plugins'))
+const featureNotes = {
+  'floating-ball': {
+    en: '- Movable floating assistant window.\n- Streamed Markdown replies with conversation and model controls.\n- Permission presets and optional capture integration.',
+    zh: '- 可移动的桌面悬浮助手窗口。\n- 流式 Markdown 回复、对话和模型控制。\n- 权限预设和可选截图录屏联动。',
+  },
+  'selection-toolbar': {
+    en: '- Text selection actions beside the selected range.\n- Translation and explanation results near the cursor.\n- Toolbar workspace notes and article or PDF import.',
+    zh: '- 在选中文字旁提供划词操作。\n- 在鼠标附近显示翻译和解读结果。\n- 工具栏工作区笔记以及文章或 PDF 导入。',
+  },
+  capture: {
+    en: '- Mouse-selected screenshots with annotation tools.\n- Region recording with pause, resume, stop, cancel, and save.\n- Independent tray entries without the floating ball.',
+    zh: '- 鼠标选区截图和标注工具。\n- 支持暂停、继续、停止、取消和保存的区域录屏。\n- 无需悬浮球即可从托盘启动。',
+  },
+}
 
 await exportNativeRuntime({ destination, repository, desktop, buildDependencies, manifest })
 for (const plugin of desktopPlugins) {
   const root = join(destination, plugin.id)
   await mkdir(root, { recursive: true })
+  const feature = featureNotes[plugin.id]
   const dependencies = Object.fromEntries(plugin.dependencies.map(name => [name, manifest.dependencies[name]]))
   const pkg = {
     name: plugin.name, version: '0.2.1', description: plugin.description, type: 'module', license: 'MIT',
@@ -90,7 +105,69 @@ export default defineConfig({
 })
 `)
   const attribution = plugin.id === 'floating-ball' ? '\n## Origin\n\nForked and adapted from [mini-yifan/deepseek-harness-orb](https://github.com/mini-yifan/deepseek-harness-orb), originally based on DeepSeek Harness. The original DeepSeek MIT copyright is retained in LICENSE.\n' : ''
-  await writeFile(join(root, 'README.md'), `# ${plugin.title}\n\nEnglish | [中文](README.zh.md)\n\n${plugin.description}.\n\nSupports official DSH Desktop through [dsh-desktop-runtime](https://github.com/1997liuyh-boop/dsh-desktop-runtime). Install and enable that runtime first, then install this feature. Version 0.2.1 no longer requires the custom Desktop extension API.\n\nInstall the Git repository from the Desktop plugin manager. Enable or disable it independently in the Desktop profile. Git commits do not update installed copies: use Add plugin with the new release tag or archive to replace the locked version, then restart the Host if requested. Existing profile data is retained when disabled or removed. ${plugin.id === 'capture' ? 'The helper tray menu provides capture entries without requiring the floating ball.' : ''}\n\n## Build\n\nRun \`npm install\` and \`npm run build\` with Node 24.9 or newer. Source and renderer assets are included. Native macOS helpers compile on macOS and require Xcode command line tools and Node API headers. Windows selection uses Koffi; Linux selection is unsupported.\n${attribution}\n## Model experience\n\nInstalling or enabling this plugin does not start model requests. Explicit assistant actions use the configured DSH session and provider; screenshot and recording actions do not call a model.\n\n## Limitations\n\nDesktop native plugins run with local application privileges. A host restart deactivates their windows and resources; restarting the host reloads enabled packages. This package requires the independent native runtime. Floating conversations are selected independently of the official main window; custom-fork background code-agent and coordinate settings are unavailable.\n`)
-  await writeFile(join(root, 'README.zh.md'), `# ${plugin.titleZh}\n\n[English](README.md) | 中文\n\n${plugin.description}。\n\n通过 [dsh-desktop-runtime](https://github.com/1997liuyh-boop/dsh-desktop-runtime) 支持官方 DSH 桌面端。请先安装并启用共享运行时，再安装本功能。0.2.1 不再要求定制 Desktop 扩展 API。\n\n在桌面端插件管理中使用 Git 仓库地址安装，可单独启用和停用。Git 提交不会刷新已安装副本；升级时通过“添加插件”安装新发布标签或归档以替换锁定版本，按提示重启 Host。停用或卸载保留现有用户数据。${plugin.id === 'capture' ? '辅助进程托盘菜单提供独立截图和录屏入口，无需安装悬浮球。' : ''}\n\n## 构建\n\n使用 Node 24.9 或更新版本运行 \`npm install\`、\`npm run build\`。仓库包含源码和界面资源。macOS 原生辅助模块在 macOS 编译，需要 Xcode 命令行工具和 Node API 头文件。Windows 划词使用 Koffi，不支持 Linux 划词。\n${plugin.id === 'floating-ball' ? '\n## 来源\n\n本插件 fork 自 [mini-yifan/deepseek-harness-orb](https://github.com/mini-yifan/deepseek-harness-orb)，该项目基于 DeepSeek Harness。LICENSE 保留 DeepSeek 原始 MIT 版权声明。\n' : ''}\n## 模型影响\n\n安装和启用不会自动请求模型。用户执行助手操作时使用已配置的 DSH 会话和模型；截图与录屏不请求模型。\n\n## 限制\n\n原生插件具有本机应用权限。Host 重启会清理插件窗口和监听，并重新加载已启用插件。需要独立原生运行时。悬浮球独立选择对话；官方版不提供定制分支的后台代码代理和坐标配置。\n`)
+  await writeFile(join(root, 'README.md'), `# ${plugin.title}
+
+English | [中文](README.zh.md)
+
+## Repository name
+
+\`${plugin.name}\`
+
+## Description
+
+${plugin.description}.
+
+## Features
+
+${feature.en}
+
+## Installation
+
+Install and enable [dsh-desktop-runtime](https://github.com/1997liuyh-boop/dsh-desktop-runtime) at tag \`0.1.1\`, then install this feature at tag \`v0.2.1\` from the Desktop plugin manager. Git commits do not update installed copies; use a new release tag or archive to replace a locked version, then restart the Host if requested.
+
+## Build
+
+Run \`npm install\` and \`npm run build\` with Node 24.9 or newer. Source and renderer assets are included. Native macOS helpers compile on macOS and require Xcode command line tools and Node API headers. Windows selection uses Koffi; Linux selection is unsupported.
+${attribution}
+## Model experience
+
+Installing or enabling this plugin does not start model requests. Explicit assistant actions use the configured DSH session and provider; screenshot and recording actions do not call a model.
+
+## Limitations
+
+Desktop native plugins run with local application privileges. A Host restart deactivates their windows and resources. This package requires the independent native runtime. Floating conversations are selected independently of the official main window; custom-fork background code-agent and coordinate settings are unavailable.
+`)
+  await writeFile(join(root, 'README.zh.md'), `# ${plugin.titleZh}
+
+[English](README.md) | 中文
+
+## 仓库名称
+
+\`${plugin.name}\`
+
+## 仓库描述
+
+${plugin.description}。
+
+## 功能与特性
+
+${feature.zh}
+
+## 安装
+
+请先在 Desktop 插件管理器中安装并启用 [dsh-desktop-runtime](https://github.com/1997liuyh-boop/dsh-desktop-runtime) 的 \`0.1.1\` 标签，再安装本功能的 \`v0.2.1\` 标签。Git 提交不会刷新已安装副本；升级时使用新的发布标签或归档替换锁定版本，按提示重启 Host。
+
+## 构建
+
+使用 Node 24.9 或更新版本运行 \`npm install\`、\`npm run build\`。仓库包含源码和界面资源。macOS 原生辅助模块需要 Xcode 命令行工具和 Node API 头文件；Windows 划词使用 Koffi；Linux 不支持划词。
+${plugin.id === 'floating-ball' ? '\n## 来源\n\n本插件 fork 自 [mini-yifan/deepseek-harness-orb](https://github.com/mini-yifan/deepseek-harness-orb)，LICENSE 保留 DeepSeek 原始 MIT 版权声明。\n' : ''}
+## 模型影响
+
+安装和启用不会自动请求模型。用户执行助手操作时使用已配置的 DSH 会话和模型；截图与录屏不请求模型。
+
+## 限制
+
+原生插件具有本机应用权限。Host 重启会清理插件窗口和监听，并重新加载已启用插件。需要独立原生运行时。悬浮球独立选择对话；官方版不提供定制分支的后台代码代理和坐标配置。
+`)
   console.log(`Exported ${plugin.name}: ${root}`)
 }

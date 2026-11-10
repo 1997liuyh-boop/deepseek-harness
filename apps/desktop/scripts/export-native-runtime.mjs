@@ -49,11 +49,23 @@ export default defineConfig([
 
 English | [中文](README.zh.md)
 
+## Repository name
+
+\`dsh-desktop-runtime\`
+
+## Description
+
 Runs separately installed floating ball, selection toolbar and capture plugins in one independent Electron helper connected to official DSH services. It does not replace the official application or modify its installation files. No desktop extension API is required.
+
+## Features
+
+- Starts the helper only when a feature plugin activates.
+- Owns authenticated RPC, stream requests, activation acknowledgements, the helper lifecycle and tray menu.
+- Allows each feature to be enabled, disabled or removed independently.
 
 ## Install and update
 
-Install the **dsh-desktop-runtime** repository in DSH's plugin manager and enable it before installing the native feature plugins. Allow Electron's installation script if the package manager requests build approval. Electron is a separate runtime dependency; its first installation downloads the platform binary. Config \`electronExecutable\` can instead select a locally installed compatible Electron 44 executable.
+Install the **dsh-desktop-runtime** repository at tag \`0.1.1\` in DSH's plugin manager and enable it before installing the native feature plugins. Allow Electron's installation script if the package manager requests build approval. Electron is a separate runtime dependency; its first installation downloads the platform binary. Config \`electronExecutable\` can instead select a locally installed compatible Electron 44 executable.
 
 Git commits do not refresh installed packages. To upgrade, use Add plugin with the new release tag or archive, then restart the Host if requested. Existing profile data remains in the same directory.
 
@@ -75,11 +87,23 @@ Run \`npm install\` and \`npm run build\` with Node 24.9 or newer. Source is inc
 
 [English](README.md) | 中文
 
+## 仓库名称
+
+\`dsh-desktop-runtime\`
+
+## 仓库描述
+
 让独立安装的悬浮球、划词工具栏、截图录屏共用一个 Electron 辅助进程，通过官方 DSH 服务访问会话。不替换官方应用，不修改其安装文件，不要求 Desktop 扩展 API。
+
+## 特性
+
+- 只在功能插件启用时启动辅助进程。
+- 负责认证 RPC、流请求、激活回执、辅助进程生命周期和托盘菜单。
+- 支持分别启用、停用和卸载各个功能插件。
 
 ## 安装与升级
 
-在 DSH 插件管理中搜索并安装 **dsh-desktop-runtime**，启用后再安装各个原生功能插件。包管理器提示构建授权时，需要允许 Electron 安装脚本；首次安装会下载对应系统的独立 Electron 运行时。也可通过配置 \`electronExecutable\` 指定本机兼容的 Electron 44 可执行文件。
+在 DSH 插件管理中搜索并安装 **dsh-desktop-runtime** 的 \`0.1.1\` 标签，启用后再安装各个原生功能插件。包管理器提示构建授权时，需要允许 Electron 安装脚本；首次安装会下载对应系统的独立 Electron 运行时。也可通过配置 \`electronExecutable\` 指定本机兼容的 Electron 44 可执行文件。
 
 提交 Git 代码不会刷新已安装副本。升级时通过“添加插件”安装新的发布标签或归档，按提示重启 Host。现有数据保留在原 profile 目录。
 
