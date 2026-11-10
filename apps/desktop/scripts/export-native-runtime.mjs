@@ -18,7 +18,11 @@ export async function exportNativeRuntime({ destination, repository, desktop, bu
     repository: { type: 'git', url: 'https://github.com/1997liuyh-boop/dsh-desktop-runtime.git' },
     dsh: { bundle: { patch: './cordis.patch.yml', platforms: ['darwin', 'win32', 'linux'] },
       compatibility: { dsh: '0.2.2-rc.1', dshReleases: { '0.2.2-rc.1': 'experimental' } } },
-    dependencies: { electron: manifest.devDependencies?.electron ?? '44.7.0', zod: manifest.dependencies.zod },
+    dependencies: {
+      electron: manifest.devDependencies?.electron ?? '44.7.0',
+      // 辅助进程将 zod 保留为外部依赖，发布包必须安装它。
+      zod: manifest.dependencies?.zod ?? manifest.devDependencies?.zod ?? '4.4.3',
+    },
     peerDependencies: Object.fromEntries(peers.map(name => [name, '*'])),
     peerDependenciesMeta: Object.fromEntries(peers.map(name => [name, { optional: true }])),
     devDependencies: { tsdown: buildDependencies.tsdown, typescript: buildDependencies.typescript },
